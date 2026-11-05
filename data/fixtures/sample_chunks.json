@@ -1,0 +1,101 @@
+[
+    {
+        "chunk_id": "POL-ACAD-EX-01_p2_c3.2",
+        "doc_id": "POL-ACAD-EX-01",
+        "doc_title": "Examination and Medical Consideration Regulations",
+        "policy_version": "v4.0 (2025 Mandatory Senate Revision)",
+        "effective_year": 2025,
+        "page_number": 2,
+        "section_title": "SECTION 3: MANDATORY TIMELINES AND APPLICATION PROCEDURE FOR MISSED EXAMINATIONS",
+        "clause_id": "Clause 3.2",
+        "chunk_type": "clause",
+        "text": "Clause 3.2 (Stage 2 — Formal Application and Medical Dossier within 5 Working Days): Following initial notification within 48 hours, the student must submit the completed Application for Examination Medical Consideration (Form EC-01) together with verified original medical documentation (Form MED-04-CLR) to the Examinations Division within five (5) working days from the date of the missed examination. Hospitalization Extension Exception: If a student remains continuously hospitalized as an inpatient for more than five working days (for example, a 10-day hospitalization), the 5-working-day submission clock commences on the date of official hospital discharge recorded on the Hospital Discharge Summary.",
+        "metadata": {
+            "module": "Examinations",
+            "superseded_legacy_days": 7,
+            "authoritative_days": 5
+        }
+    },
+    {
+        "chunk_id": "POL-ACAD-AT-02_p2_t2.1",
+        "doc_id": "POL-ACAD-AT-02",
+        "doc_title": "Attendance and Medical Absence Administration Policy",
+        "policy_version": "v3.2 (2025 Mandatory Senate Revision)",
+        "effective_year": 2025,
+        "page_number": 2,
+        "section_title": "SECTION 2 & 3: ATTENDANCE THRESHOLDS AND HOSPITALIZATION WAIVER",
+        "clause_id": "Table 2.1 & Clause 3.1",
+        "chunk_type": "table",
+        "text": "Every student must maintain 80% minimum attendance. Standard Medical Condonation Zone (70.0% to 79.9%): Approved by Head of Department via Form ATT-02A and Form MED-04-CLR within 5 working days of return. Exceptional Hospitalization Waiver Zone (65.0% to 69.9%): Approved by Dean of Faculty via Form ATT-02B for inpatient hospitalization >= 7 days (including 10-day stays) with Academic Catch-Up Plan. Hard Floor (< 65.0%): Strictly ineligible for final examinations (Grade: NQ Barred); must apply for Temporary Medical Intercalation (Form PRG-05-INT).",
+        "metadata": {
+            "module": "Attendance",
+            "standard_floor": 70,
+            "hard_floor": 65
+        }
+    },
+    {
+        "chunk_id": "POL-ACAD-CW-03_p2_t2.1",
+        "doc_id": "POL-ACAD-CW-03",
+        "doc_title": "Coursework, Continuous Assessment, and Extension Regulations",
+        "policy_version": "v3.0 (2025 Mandatory Senate Revision)",
+        "effective_year": 2025,
+        "page_number": 2,
+        "section_title": "SECTION 2 & 4: THREE-TIER COURSEWORK EXTENSIONS AND LATE PENALTIES",
+        "clause_id": "Table 2.1 & Clause 4.1",
+        "chunk_type": "table",
+        "text": "Tier 1 Extension (1-3 working days): Module Leader approval via Form EXT-03A. Tier 2 Extension (4-7 working days): Head of Department approval via Form EXT-03B + Form MED-04-CLR. Tier 3 Hospitalization Extension (8-14 calendar days): Faculty EC Panel approval via Form EXT-03C + Inpatient Hospital Discharge Summary. Retrospective hospitalization applications are permitted within 3 working days after hospital discharge (Clause 3.2). Unapproved late submissions incur a penalty of 5% per working day up to 5 working days, and 0% after Day 5.",
+        "metadata": {
+            "module": "Coursework",
+            "late_penalty_per_day": 5,
+            "max_extension_days": 14
+        }
+    },
+    {
+        "chunk_id": "POL-MED-WF-04_p3_t3.1",
+        "doc_id": "POL-MED-WF-04",
+        "doc_title": "Medical Documentation Standards and Student Welfare Guidelines",
+        "policy_version": "v3.5 (2025 Mandatory Senate Revision)",
+        "effective_year": 2025,
+        "page_number": 3,
+        "section_title": "SECTION 3 & 4: INPATIENT HOSPITALIZATION DOSSIER AND UMC VERIFICATION",
+        "clause_id": "Clause 3.2 & Table 4.1",
+        "chunk_type": "table",
+        "text": "For inpatient hospitalization (e.g., a 10-day stay), students must submit: (1) SLMC Medical Certificate, (2) Official Hospital Admission & Discharge Ticket showing exact admission and discharge dates, and (3) Ward Consultant Clinical Summary. Original documents must first be presented to the University Medical Center (UMC, Building B, Ground Floor) within 5 working days of discharge to obtain the Chief Medical Officer Clearance Slip (Form MED-04-CLR) before filing with Examinations (Counter 204) or Faculty Admin (Room F-102). Government Ayurvedic Hospital certificates require CMO countersignature within 3 working days; private Ayurvedic notes are rejected.",
+        "metadata": {
+            "module": "Welfare",
+            "verification_form": "Form MED-04-CLR"
+        }
+    },
+    {
+        "chunk_id": "HBK-ACAD-PR-05_p2_t2.1",
+        "doc_id": "HBK-ACAD-PR-05",
+        "doc_title": "Academic Progression Regulations and Student Handbook",
+        "policy_version": "v1.8 (2023 Legacy / 2025 Overrides)",
+        "effective_year": 2023,
+        "page_number": 2,
+        "section_title": "SECTION 2 & 3: INTEGRATED 10-DAY HOSPITALIZATION ACTION PLAN & PROGRESSION",
+        "clause_id": "Table 2.1 & Clause 3.2",
+        "chunk_type": "table",
+        "text": "Students hospitalized for 10 days affecting exams, attendance, and coursework simultaneously must follow the 6-step Consolidated Case Protocol (Form PRG-05-CASE): (1) Online alert within 48h of missed exam; (2) Collect Hospital Discharge Ticket & Consultant Summary on discharge; (3) Obtain Form MED-04-CLR at UMC and file retrospective Tier-3 coursework extension (Form EXT-03C) within 3 working days of discharge; (4) File Form EC-01 for uncapped I-Med deferred exam within 5 working days of discharge; (5) File Form ATT-02A/B for attendance condonation within 5 working days of discharge; (6) Register Form PRG-05-CASE at Student Welfare Suite 108. Approved I-Med credits up to 30 credits allow provisional progression without GPA penalty.",
+        "metadata": {
+            "module": "Progression",
+            "case_form": "Form PRG-05-CASE"
+        }
+    },
+    {
+        "chunk_id": "HBK-ACAD-PR-05_p4_t5.1",
+        "doc_id": "HBK-ACAD-PR-05",
+        "doc_title": "Academic Progression Regulations and Student Handbook",
+        "policy_version": "v1.8 (2023 Legacy Edition)",
+        "effective_year": 2023,
+        "page_number": 4,
+        "section_title": "SECTION 5: LEGACY 2023 ADMINISTRATIVE SUMMARY (SUPERSEDED)",
+        "clause_id": "Clauses 5.1 - 5.5 & Table 5.1",
+        "chunk_type": "callout",
+        "text": "LEGACY 2023 RULES (SUPERSEDED BY 2025 SENATE POLICIES): Clause 5.1 states missed exam medical certificates may be submitted within 7 calendar days (overridden by 5 working days in POL-ACAD-EX-01 v4.0). Clause 5.2 states attendance condonation is allowed down to 60% (overridden by 70% standard / 65% hard floor in POL-ACAD-AT-02 v3.2). Clause 5.3 states late coursework penalty is 2% per day up to 10 days (overridden by 5% per working day up to 5 days in POL-ACAD-CW-03 v3.0). Clause 5.4 states lecturers may grant 21-day extensions (overridden by 3 days lecturer / 14 days max EC Panel in POL-ACAD-CW-03 v3.0). Clause 5.5 states private Ayurvedic notes are accepted directly (overridden by POL-MED-WF-04 v3.5).",
+        "metadata": {
+            "module": "Conflict_Audit",
+            "is_legacy": true
+        }
+    }
+]
