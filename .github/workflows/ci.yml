@@ -29,7 +29,7 @@ jobs:
       - name: Install Core Test Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pydantic
+          pip install pytest pydantic numpy
 
       - name: Check Python Syntax Across All Packages
         run: |
