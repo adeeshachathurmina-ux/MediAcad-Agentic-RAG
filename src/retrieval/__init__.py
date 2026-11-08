@@ -12,6 +12,10 @@ from src.retrieval.math_mechanics import (
     min_max_normalize,
     hybrid_fuse_score,
 )
+from src.retrieval.sparse_engine import (
+    TFIDFAndBM25Engine,
+    tokenize,
+)
 
 __all__ = [
     "vector_magnitude",
@@ -21,5 +25,7 @@ __all__ = [
     "batch_cosine_similarity",
     "min_max_normalize",
     "hybrid_fuse_score",
+    "TFIDFAndBM25Engine",
+    "tokenize",
 ]
 
