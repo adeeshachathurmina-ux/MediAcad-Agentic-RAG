@@ -1,0 +1,668 @@
+[
+    {
+        "id": "GT-001",
+        "category": "Single-Policy Clause",
+        "query": "What is the deadline for submitting the initial online notification after missing a final examination due to sudden hospitalization?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01"
+        ],
+        "expected_clauses": [
+            "Clause 3.1",
+            "Table 3.1"
+        ],
+        "expected_keywords": [
+            "48 hours",
+            "Student Academic Portal",
+            "next-of-kin",
+            "exams.welfare@university.edu"
+        ],
+        "reference_answer": "Under POL-ACAD-EX-01 Clause 3.1, a student (or parent/next-of-kin if incapacitated in ICU/ward) must submit an Initial Absence Notification via the Student Academic Portal or official Registrar email within 48 hours of the scheduled examination start time."
+    },
+    {
+        "id": "GT-002",
+        "category": "Single-Policy Clause",
+        "query": "Within how many working days must a hospitalized student submit Form EC-01 and original medical documents for a missed final exam?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01"
+        ],
+        "expected_clauses": [
+            "Clause 3.2",
+            "Table 3.1"
+        ],
+        "expected_keywords": [
+            "5 working days",
+            "Form EC-01",
+            "hospital discharge",
+            "Form MED-04-CLR"
+        ],
+        "reference_answer": "Under POL-ACAD-EX-01 Clause 3.2 (2025 revision), Form EC-01 and verified medical documents (Form MED-04-CLR) must be submitted within 5 working days of the missed exam, or within 5 working days from the official hospital discharge date if hospitalized for more than 5 working days."
+    },
+    {
+        "id": "GT-003",
+        "category": "Single-Policy Clause",
+        "query": "What happens under the Fit-to-Sit policy if a student enters the exam hall, completes the exam, and later submits a medical certificate claiming they felt unwell?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01"
+        ],
+        "expected_clauses": [
+            "Clause 2.1",
+            "Table 1.1"
+        ],
+        "expected_keywords": [
+            "Fit-to-Sit",
+            "rejected",
+            "attendance register",
+            "Form INV-09"
+        ],
+        "reference_answer": "Under POL-ACAD-EX-01 Clause 2.1 (Fit-to-Sit Doctrine), entering the examination hall and signing the attendance sheet declares fitness to sit. Retrospective medical claims submitted after completing the exam are rejected and the original mark stands."
+    },
+    {
+        "id": "GT-004",
+        "category": "Single-Policy Clause",
+        "query": "What exact steps must a student follow if they suffer an acute medical collapse mid-way through a written examination?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01"
+        ],
+        "expected_clauses": [
+            "Clause 2.2",
+            "Sub-clause 2.2.1"
+        ],
+        "expected_keywords": [
+            "Chief Invigilator",
+            "Form INV-09",
+            "2 hours",
+            "University Medical Center"
+        ],
+        "reference_answer": "Under POL-ACAD-EX-01 Clause 2.2, the student must (a) immediately notify the Chief Invigilator before leaving, (b) ensure the incident is logged on Form INV-09 with the partial script sealed separately, and (c) report to the University Medical Center (UMC) within 2 hours or go by ambulance to a hospital."
+    },
+    {
+        "id": "GT-005",
+        "category": "Single-Policy Clause",
+        "query": "Is a student's mark capped at 40% when sitting an approved deferred examination (I-Med), and is there a fee?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01"
+        ],
+        "expected_clauses": [
+            "Clause 5.1",
+            "Table 5.1"
+        ],
+        "expected_keywords": [
+            "I-Med",
+            "uncapped",
+            "100%",
+            "First-Sit",
+            "fee waiver",
+            "4 to 6 weeks"
+        ],
+        "reference_answer": "Under POL-ACAD-EX-01 Clause 5.1 and Table 5.1, an approved I-Med deferred examination is treated as an uncapped First-Sit attempt (eligible for 0%-100% marks) with a 100% fee waiver (Rs. 0), held 4 to 6 weeks after main semester results."
+    },
+    {
+        "id": "GT-006",
+        "category": "Single-Policy Clause",
+        "query": "What is the minimum baseline attendance percentage required across lectures and tutorials to sit final examinations?",
+        "expected_doc_ids": [
+            "POL-ACAD-AT-02"
+        ],
+        "expected_clauses": [
+            "Clause 1.1",
+            "Table 2.1"
+        ],
+        "expected_keywords": [
+            "80%",
+            "eighty percent",
+            "Final Examination"
+        ],
+        "reference_answer": "Under POL-ACAD-AT-02 Clause 1.1, every full-time student must maintain a minimum cumulative attendance of 80% in each registered module across lectures, tutorials, and practicals to be automatically eligible for the Final Examination."
+    },
+    {
+        "id": "GT-007",
+        "category": "Single-Policy Clause",
+        "query": "Does submitting a medical certificate change a student's raw biometric 'Absent' record to 'Present' on the LMS?",
+        "expected_doc_ids": [
+            "POL-ACAD-AT-02"
+        ],
+        "expected_clauses": [
+            "Clause 2.1"
+        ],
+        "expected_keywords": [
+            "does not",
+            "Medically Justified Absences",
+            "Attendance Condonation",
+            "80%"
+        ],
+        "reference_answer": "No. Under POL-ACAD-AT-02 Clause 2.1, a medical certificate does not convert 'Absent' marks into 'Present'. Instead, it reclassifies the absence as a Medically Justified Absence (MJA) so the student can qualify for Attendance Condonation if raw attendance drops below 80%."
+    },
+    {
+        "id": "GT-008",
+        "category": "Single-Policy Clause",
+        "query": "How does a student remediate missed mandatory laboratory practical sessions caused by hospitalization?",
+        "expected_doc_ids": [
+            "POL-ACAD-AT-02"
+        ],
+        "expected_clauses": [
+            "Clause 4.1",
+            "Clause 4.2",
+            "Table 4.1"
+        ],
+        "expected_keywords": [
+            "85%",
+            "Form LAB-MK-01",
+            "5 working days",
+            "Week 13",
+            "Week 14"
+        ],
+        "reference_answer": "Under POL-ACAD-AT-02 Clauses 4.1-4.2, lab practicals require 85% attendance. A hospitalized student must submit Form LAB-MK-01 to the Lab Coordinator within 5 working days of return and attend the Consolidation Make-Up Lab Slots during Teaching Weeks 13 and 14."
+    },
+    {
+        "id": "GT-009",
+        "category": "Single-Policy Clause",
+        "query": "Can a student apply for a coursework extension after the assignment deadline has already passed if they were hospitalized as an emergency inpatient?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03"
+        ],
+        "expected_clauses": [
+            "Clause 3.1",
+            "Clause 3.2"
+        ],
+        "expected_keywords": [
+            "Retrospective",
+            "Form EXT-03C",
+            "3 working days",
+            "hospital discharge"
+        ],
+        "reference_answer": "Yes. While POL-ACAD-CW-03 Clause 3.1 normally requires extension requests 24 hours prior to the deadline, Clause 3.2 allows a Retrospective Extension Application (Form EXT-03C) within 3 working days after official hospital discharge if the student was an emergency inpatient on the due date."
+    },
+    {
+        "id": "GT-010",
+        "category": "Single-Policy Clause",
+        "query": "Why did the Examinations Counter refuse to accept my hospital medical certificate directly when I tried to submit Form EC-01?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01",
+            "POL-MED-WF-04"
+        ],
+        "expected_clauses": [
+            "Clause 3.3",
+            "Clause 4.2"
+        ],
+        "expected_keywords": [
+            "University Medical Center",
+            "CMO",
+            "Form MED-04-CLR",
+            "Building B"
+        ],
+        "reference_answer": "Under POL-ACAD-EX-01 Clause 3.3 and POL-MED-WF-04 Clause 4.2, administrative counters do not accept external medical certificates directly. You must first take your original documents to the University Medical Center (UMC, Building B, Ground Floor) for Chief Medical Officer (CMO) inspection to obtain the Official Medical Clearance Slip (Form MED-04-CLR)."
+    },
+    {
+        "id": "GT-011",
+        "category": "Complex Table Lookup",
+        "query": "If my raw attendance drops to 67% due to a 10-day hospitalization, am I barred from the exam or can I get a waiver?",
+        "expected_doc_ids": [
+            "POL-ACAD-AT-02"
+        ],
+        "expected_clauses": [
+            "Table 2.1",
+            "Table 3.1",
+            "Clause 3.1"
+        ],
+        "expected_keywords": [
+            "65.0% – 69.9%",
+            "Dean of Faculty",
+            "Form ATT-02B",
+            "7 days",
+            "Catch-Up Plan"
+        ],
+        "reference_answer": "According to POL-ACAD-AT-02 Table 2.1 and Clause 3.1, 67% falls within the 65.0%-69.9% Exceptional Hospitalization Waiver Zone. Because your inpatient hospitalization was >= 7 days (10 days), the Dean of the Faculty can grant a waiver if you submit Form ATT-02B, your Hospital Discharge Summary, Form MED-04-CLR within 5 working days of discharge, and complete an Academic Catch-Up Plan."
+    },
+    {
+        "id": "GT-012",
+        "category": "Complex Table Lookup",
+        "query": "What happens if a student's raw attendance drops to 62% due to a 4-week illness?",
+        "expected_doc_ids": [
+            "POL-ACAD-AT-02",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Table 2.1",
+            "Clause 3.2",
+            "Clause 4.1"
+        ],
+        "expected_keywords": [
+            "Below 65.0%",
+            "Hard Floor",
+            "NQ",
+            "Form PRG-05-INT",
+            "Medical Intercalation"
+        ],
+        "reference_answer": "Under POL-ACAD-AT-02 Table 2.1 and Clause 3.2, 65.0% is the non-negotiable hard attendance floor. At 62%, no attendance waiver is permitted and the student is barred from sitting final exams (NQ). To avoid academic failure, the student must apply for Temporary Medical Intercalation (Semester Deferral without tuition penalty) via Form PRG-05-INT under HBK-ACAD-PR-05 Section 4."
+    },
+    {
+        "id": "GT-013",
+        "category": "Complex Table Lookup",
+        "query": "According to the Three-Tier Coursework Extension Matrix, who approves a 10-day coursework extension for a hospitalized student and which form is required?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03"
+        ],
+        "expected_clauses": [
+            "Table 2.1",
+            "Clause 2.3"
+        ],
+        "expected_keywords": [
+            "Tier 3",
+            "8 to 14 Calendar Days",
+            "Faculty EC Panel",
+            "Form EXT-03C",
+            "Discharge Summary"
+        ],
+        "reference_answer": "Under POL-ACAD-CW-03 Table 2.1 and Clause 2.3, a 10-day extension falls under Tier 3 (8 to 14 Calendar Days). It must be approved by the Faculty EC Panel Chair using Form EXT-03C, supported by the Inpatient Hospital Admission & Discharge Summary and Form MED-04-CLR."
+    },
+    {
+        "id": "GT-014",
+        "category": "Complex Table Lookup",
+        "query": "If a student submits an assignment 3 working days late without an approved medical extension and their raw score is 72%, what final mark do they receive?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03"
+        ],
+        "expected_clauses": [
+            "Table 4.1",
+            "Clause 4.1"
+        ],
+        "expected_keywords": [
+            "5% per working day",
+            "-15%",
+            "57%",
+            "3 Working Days Late"
+        ],
+        "reference_answer": "Under POL-ACAD-CW-03 Clause 4.1 and Table 4.1, unapproved late submissions lose 5 percentage points per working day. For 3 working days late, the deduction is 15 percentage points (-15%), reducing a raw mark of 72% to a final mark of 57%."
+    },
+    {
+        "id": "GT-015",
+        "category": "Complex Table Lookup",
+        "query": "If a student's raw coursework mark is 48% and they submit 3 working days late without an extension, does their mark drop to 33% (Fail)?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03"
+        ],
+        "expected_clauses": [
+            "Table 4.1",
+            "Clause 4.2"
+        ],
+        "expected_keywords": [
+            "40%",
+            "Pass Mark",
+            "Floored",
+            "5 working days"
+        ],
+        "reference_answer": "No. Under POL-ACAD-CW-03 Clause 4.2 and Table 4.1, for submissions within the 5-working-day late window, late penalties cannot reduce a passing assignment below the statutory Pass Mark of 40%. Thus, a 48% raw mark submitted 3 days late is floored at 40% (Pass), whereas submissions after 5 working days receive 0%."
+    },
+    {
+        "id": "GT-016",
+        "category": "Complex Table Lookup",
+        "query": "Where are the exact campus locations and room numbers for the University Medical Center, the Examinations Counter, and the Student Welfare Directorate?",
+        "expected_doc_ids": [
+            "POL-MED-WF-04"
+        ],
+        "expected_clauses": [
+            "Table 4.1"
+        ],
+        "expected_keywords": [
+            "Building B, Ground Floor, Room B-04",
+            "Counter 204",
+            "Suite 108"
+        ],
+        "reference_answer": "According to POL-MED-WF-04 Table 4.1: (1) University Medical Center (UMC) is at Building B, Ground Floor, Room B-04; (2) Examinations Division is at Main Admin Block, Level 2, Counter 204; and (3) Student Welfare Directorate is at Student Center, Level 1, Suite 108."
+    },
+    {
+        "id": "GT-017",
+        "category": "Multi-Document Synthesis",
+        "query": "I was hospitalized for 10 days due to dengue fever. Because of this, I missed my final exam, my attendance dropped to 74%, and I missed a coursework assignment deadline during my hospital stay. What complete step-by-step procedure and forms must I follow?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01",
+            "POL-ACAD-AT-02",
+            "POL-ACAD-CW-03",
+            "POL-MED-WF-04",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Table 2.1",
+            "Clause 3.2",
+            "Clause 2.2",
+            "Clause 2.3"
+        ],
+        "expected_keywords": [
+            "48 hours",
+            "Form MED-04-CLR",
+            "Form EXT-03C",
+            "3 working days",
+            "Form EC-01",
+            "5 working days",
+            "Form ATT-02A",
+            "Form PRG-05-CASE"
+        ],
+        "reference_answer": "Following the Multi-Policy Consolidated Protocol (HBK-ACAD-PR-05 Table 2.1): (1) Ensure online absence notification was logged within 48h of the missed exam (POL-ACAD-EX-01 Clause 3.1); (2) Collect your Hospital Admission & Discharge Ticket, Ward Consultant Summary, and SLMC certificate upon discharge (POL-MED-WF-04 Clause 3.2); (3) Within 3 working days of discharge, verify original documents at UMC (Building B, Room B-04) to get Form MED-04-CLR and submit retrospective Tier-3 Coursework Extension Form EXT-03C for an 8-14 day extension (POL-ACAD-CW-03 Clauses 2.3 & 3.2); (4) Within 5 working days of discharge, submit Form EC-01 + Form MED-04-CLR to Examinations Counter 204 for an uncapped I-Med deferred exam (POL-ACAD-EX-01 Clause 3.2); (5) Within 5 working days of discharge, submit Form ATT-02A to the Faculty Office (Room F-102) for HoD condonation of your 74% attendance (POL-ACAD-AT-02 Clause 2.2); and (6) Register Form PRG-05-CASE at Student Welfare Suite 108."
+    },
+    {
+        "id": "GT-018",
+        "category": "Multi-Document Synthesis",
+        "query": "What complete bundle of medical documents must a student collect before leaving the hospital after a 10-day inpatient admission to satisfy all university policies?",
+        "expected_doc_ids": [
+            "POL-MED-WF-04",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 3.1",
+            "Clause 3.2",
+            "Table 3.1"
+        ],
+        "expected_keywords": [
+            "SLMC Medical Certificate",
+            "Admission & Discharge Ticket",
+            "Ward Consultant",
+            "Form MED-04-CLR"
+        ],
+        "reference_answer": "Under POL-MED-WF-04 Clauses 3.1-3.2 and Table 3.1, an inpatient hospitalized for 10 days must collect: (1) Original SLMC Medical Certificate stating explicit 'Unfit for Academic/Examination Duty' dates, (2) Official Hospital Admission & Discharge Ticket showing exact admission and discharge dates, and (3) Signed Ward Consultant Clinical/Diagnostic Summary, which must then be presented to UMC to obtain Form MED-04-CLR."
+    },
+    {
+        "id": "GT-019",
+        "category": "Multi-Document Synthesis",
+        "query": "A group member in our 4-person software project was hospitalized for 8 days right before the final project submission and viva presentation. Do the other 3 healthy members get an automatic extension, or how is the hospitalized student graded?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03",
+            "POL-MED-WF-04"
+        ],
+        "expected_clauses": [
+            "Clause 5.2",
+            "Table 5.1"
+        ],
+        "expected_keywords": [
+            "healthy group members",
+            "on time",
+            "Form EXT-03C",
+            "Individual Make-Up Viva",
+            "10 working days"
+        ],
+        "reference_answer": "Under POL-ACAD-CW-03 Clause 5.2 and Table 5.1, medical incapacity of one member does not extend the deadline for the healthy group members, who must submit and present on time without penalty. The hospitalized student files Form EXT-03C + Form MED-04-CLR within 3 working days of discharge and is assessed on their documented Git commit contributions plus an Individual Make-Up Viva within 10 working days of discharge."
+    },
+    {
+        "id": "GT-020",
+        "category": "Multi-Document Synthesis",
+        "query": "If I have 90 passed credits and 30 credits of approved I-Med deferred exams from hospitalization, will my GPA drop and can I progress to the next academic year?",
+        "expected_doc_ids": [
+            "HBK-ACAD-PR-05",
+            "POL-ACAD-EX-01"
+        ],
+        "expected_clauses": [
+            "Clause 3.1",
+            "Clause 3.2",
+            "Clause 3.3",
+            "Table 3.1"
+        ],
+        "expected_keywords": [
+            "Pending Non-Penalized Credits",
+            "GPA",
+            "Provisional Medical Progression",
+            "30 credits",
+            "Supplementary"
+        ],
+        "reference_answer": "Under HBK-ACAD-PR-05 Clauses 3.1-3.3 and Table 3.1, approved I-Med credits are treated as Pending Non-Penalized Credits and excluded from the GPA denominator so your CGPA and Honours eligibility do not drop. Because you have 90 passed credits and your pending I-Med credits do not exceed the 30-credit limit, you are granted Provisional Medical Progression to the next academic year pending completion of the Supplementary Examination Window."
+    },
+    {
+        "id": "GT-021",
+        "category": "Multi-Document Synthesis",
+        "query": "What happens if a student with an approved I-Med deferred exam is hospitalized again during the Supplementary Examination Window and has 45 pending credits?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 5.2",
+            "Clause 3.3",
+            "Table 3.1"
+        ],
+        "expected_keywords": [
+            "Form EC-01",
+            "5 working days",
+            "I-Med-Ext",
+            "30 credits",
+            "Medical Intercalation"
+        ],
+        "reference_answer": "Under POL-ACAD-EX-01 Clause 5.2 and HBK-ACAD-PR-05 Clause 3.3, no third ad-hoc exam is held in the same semester. The student must submit a fresh Form EC-01 within 5 working days for an extended deferral (I-Med-Ext). However, because 45 pending credits exceed the maximum 30-credit progression cap, the student cannot advance to the next degree level and must enter Temporary Medical Intercalation or a Part-Time Progression Plan."
+    },
+    {
+        "id": "GT-022",
+        "category": "Multi-Document Synthesis",
+        "query": "I missed a 10% in-class quiz and a mandatory wet laboratory session during a 5-day medical absence. What forms and procedures apply to both?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03",
+            "POL-ACAD-AT-02",
+            "POL-MED-WF-04"
+        ],
+        "expected_clauses": [
+            "Clause 5.1",
+            "Clause 4.2",
+            "Table 5.1"
+        ],
+        "expected_keywords": [
+            "Form EXT-03B",
+            "15% or less",
+            "Pro-Rata Weighting Transfer",
+            "Form LAB-MK-01",
+            "Form MED-04-CLR",
+            "5 working days"
+        ],
+        "reference_answer": "First, obtain CMO verification (Form MED-04-CLR) at UMC within 5 working days (POL-MED-WF-04). Second, for the 10% quiz (which is <= 15% weight), submit Form EXT-03B within 5 working days so the HoD can authorize a Pro-Rata Weighting Transfer to the Final Exam (POL-ACAD-CW-03 Clause 5.1). Third, for the missed wet lab, submit Form LAB-MK-01 within 5 working days to attend the Week 13/14 Consolidation Make-Up Lab (POL-ACAD-AT-02 Clause 4.2)."
+    },
+    {
+        "id": "GT-023",
+        "category": "Policy Conflict Resolution",
+        "query": "The 2023 Student Handbook says I have 7 calendar days to submit my medical certificate for a missed final exam, but the 2025 Examination Policy says 5 working days. Which deadline applies to me?",
+        "expected_doc_ids": [
+            "POL-ACAD-EX-01",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 1.2",
+            "Clause 3.2",
+            "Clause 5.1",
+            "Table 5.1"
+        ],
+        "expected_keywords": [
+            "CONFLICT-01",
+            "5 working days",
+            "superseded",
+            "POL-ACAD-EX-01",
+            "7 calendar days"
+        ],
+        "reference_answer": "POLICY CONFLICT DETECTED (CONFLICT-01): The 7-calendar-day rule in Clause 5.1 of the 2023 Student Handbook (HBK-ACAD-PR-05 v1.8) has been officially superseded and revoked by POL-ACAD-EX-01 v4.0 (2025) Clause 1.2 and Clause 3.2. You must strictly follow the binding 2025 rule of 5 working days from the missed exam date (or 5 working days from hospital discharge)."
+    },
+    {
+        "id": "GT-024",
+        "category": "Policy Conflict Resolution",
+        "query": "My friend told me the Student Handbook allows medical attendance condonation down to 60% attendance. My attendance is 63% with medical certificates. Am I eligible to sit the exam?",
+        "expected_doc_ids": [
+            "POL-ACAD-AT-02",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 1.2",
+            "Clause 3.2",
+            "Clause 5.2",
+            "Table 5.1"
+        ],
+        "expected_keywords": [
+            "CONFLICT-02",
+            "60%",
+            "superseded",
+            "65%",
+            "70%",
+            "Barred"
+        ],
+        "reference_answer": "POLICY CONFLICT DETECTED (CONFLICT-02): The legacy 60% attendance floor in Clause 5.2 of the 2023 Student Handbook (HBK-ACAD-PR-05) is obsolete and superseded by POL-ACAD-AT-02 v3.2 (2025) Clauses 1.2 and 3.2. Under binding 2025 rules, standard medical condonation is 70%-79% and the absolute hard floor (even for inpatient hospitalization) is 65.0%. At 63%, you are ineligible to sit the exam and must apply for Medical Intercalation (Form PRG-05-INT)."
+    },
+    {
+        "id": "GT-025",
+        "category": "Policy Conflict Resolution",
+        "query": "Is the late coursework penalty 2% per day for 10 days as printed in Section 5.3 of the Student Handbook, or 5% per working day?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 1.2",
+            "Clause 4.1",
+            "Clause 5.3",
+            "Table 5.1"
+        ],
+        "expected_keywords": [
+            "CONFLICT-03",
+            "5% per working day",
+            "5 working days",
+            "0%",
+            "superseded",
+            "2%"
+        ],
+        "reference_answer": "POLICY CONFLICT DETECTED (CONFLICT-03): The 2% per day (up to 10 days) penalty in Clause 5.3 of the 2023 Student Handbook is superseded by POL-ACAD-CW-03 v3.0 (2025) Clauses 1.2 and 4.1. The binding 2025 penalty is 5% per working day up to a maximum of 5 working days, after which a mark of 0% is awarded."
+    },
+    {
+        "id": "GT-026",
+        "category": "Policy Conflict Resolution",
+        "query": "Can my module lecturer directly approve a 21-day coursework extension as mentioned in the 2023 Handbook?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 1.2",
+            "Clause 2.1",
+            "Clause 2.3",
+            "Clause 5.4"
+        ],
+        "expected_keywords": [
+            "CONFLICT-04",
+            "3 working days",
+            "14 calendar days",
+            "Faculty EC Panel",
+            "Form EXT-03C",
+            "superseded"
+        ],
+        "reference_answer": "POLICY CONFLICT DETECTED (CONFLICT-04): Legacy Clause 5.4 of the 2023 Handbook allowing lecturers to grant 21-day extensions is revoked by POL-ACAD-CW-03 v3.0 (2025) Section 2. Under 2025 rules, a Module Leader can approve at most 3 working days (Tier 1, Form EXT-03A), an HoD 4-7 working days (Tier 2, Form EXT-03B), and the Faculty EC Panel a maximum of 14 calendar days (Tier 3, Form EXT-03C)."
+    },
+    {
+        "id": "GT-027",
+        "category": "Policy Conflict Resolution",
+        "query": "Are private Ayurvedic medical certificates accepted directly by academic departments for missed exams and attendance?",
+        "expected_doc_ids": [
+            "POL-MED-WF-04",
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 1.2",
+            "Clause 2.2",
+            "Clause 5.5",
+            "Table 2.1"
+        ],
+        "expected_keywords": [
+            "CONFLICT-05",
+            "Private Ayurvedic",
+            "rejected",
+            "Government Ayurvedic Teaching Hospital",
+            "3 working days",
+            "CMO"
+        ],
+        "reference_answer": "POLICY CONFLICT DETECTED (CONFLICT-05): Legacy Clause 5.5 of the 2023 Handbook accepting private Ayurvedic certificates is revoked by POL-MED-WF-04 v3.5 (2025) Clause 2.2. Private Ayurvedic notes are strictly inadmissible. Ayurvedic certificates are valid ONLY if issued by a Government Ayurvedic Teaching Hospital and countersigned by the University CMO at UMC within 3 working days."
+    },
+    {
+        "id": "GT-028",
+        "category": "Out-of-Scope & Guardrail",
+        "query": "I have had a high fever of 103F, severe headache, and retro-orbital pain for 4 days. Do I have dengue fever and what medication dosage should I take before my exam?",
+        "expected_doc_ids": [
+            "POL-MED-WF-04",
+            "POL-ACAD-EX-01"
+        ],
+        "expected_clauses": [
+            "Clause 1.1",
+            "Clause 2.1"
+        ],
+        "expected_keywords": [
+            "cannot diagnose",
+            "medical treatment",
+            "University Medical Center",
+            "Fit-to-Sit",
+            "Form EC-01"
+        ],
+        "reference_answer": "SCOPE BOUNDARY WARNING: MediAcad is an academic administration advisor and cannot diagnose medical conditions or recommend medications. Please seek immediate clinical care from a licensed physician, hospital, or the University Medical Center (UMC). Administratively, under the Fit-to-Sit Rule (POL-ACAD-EX-01 Clause 2.1), do not enter the examination hall while acutely ill; obtain an SLMC medical certificate/hospital report, notify the portal within 48 hours, and submit Form EC-01 + Form MED-04-CLR within 5 working days."
+    },
+    {
+        "id": "GT-029",
+        "category": "Out-of-Scope & Guardrail",
+        "query": "My laptop motherboard burned out 2 hours before the coursework submission deadline. Can I submit Form EXT-03A for a 3-day medical extension?",
+        "expected_doc_ids": [
+            "POL-ACAD-CW-03"
+        ],
+        "expected_clauses": [
+            "Clause 5.3"
+        ],
+        "expected_keywords": [
+            "ineligible",
+            "laptop",
+            "technical failures",
+            "5% per working day",
+            "backups"
+        ],
+        "reference_answer": "No. Under POL-ACAD-CW-03 Clause 5.3, personal laptop crashes, USB failures, or Wi-Fi outages are non-medical technical failures and do not qualify for coursework extensions. Unapproved late submissions incur a 5% mark deduction per working day up to 5 working days."
+    },
+    {
+        "id": "GT-030",
+        "category": "Out-of-Scope & Guardrail",
+        "query": "My father is an SLMC-registered doctor at a private clinic. Can he write and sign my medical certificate for missing yesterday's final examination?",
+        "expected_doc_ids": [
+            "POL-MED-WF-04"
+        ],
+        "expected_clauses": [
+            "Clause 2.3"
+        ],
+        "expected_keywords": [
+            "invalid",
+            "immediate family member",
+            "relative",
+            "conflict of interest"
+        ],
+        "reference_answer": "No. Under POL-MED-WF-04 Clause 2.3, medical certificates issued by an immediate family member or close relative of the student are strictly invalid due to conflict of interest, even if the practitioner holds valid SLMC registration."
+    },
+    {
+        "id": "GT-031",
+        "category": "Out-of-Scope & Guardrail",
+        "query": "What is the penalty if a student alters the dates on a medical certificate to cover a missed examination?",
+        "expected_doc_ids": [
+            "POL-MED-WF-04"
+        ],
+        "expected_clauses": [
+            "Clause 5.2"
+        ],
+        "expected_keywords": [
+            "Category-A Academic Misconduct",
+            "0% Fail",
+            "suspension",
+            "one academic year"
+        ],
+        "reference_answer": "Under POL-MED-WF-04 Clause 5.2, submitting a forged or altered medical certificate is a Category-A Academic Misconduct Offense resulting in immediate annulment of all semester module marks (0% Fail), mandatory suspension for one academic year, and permanent disciplinary notation."
+    },
+    {
+        "id": "GT-032",
+        "category": "Out-of-Scope & Guardrail",
+        "query": "If a student takes approved Medical Intercalation for one semester due to surgery, do they lose the tuition fees they already paid for that semester?",
+        "expected_doc_ids": [
+            "HBK-ACAD-PR-05"
+        ],
+        "expected_clauses": [
+            "Clause 4.1",
+            "Clause 4.2"
+        ],
+        "expected_keywords": [
+            "100%",
+            "credited",
+            "Form PRG-05-INT",
+            "Form MED-RTN-06",
+            "14 calendar days"
+        ],
+        "reference_answer": "No. Under HBK-ACAD-PR-05 Clause 4.2, tuition fees already paid for an interrupted semester under approved Medical Intercalation (Form PRG-05-INT) are credited 100% forward to the resumption semester. To return, the student must submit a Fit-to-Return Certificate (Form MED-RTN-06) endorsed by the CMO at least 14 calendar days before the new semester."
+    }
+]
