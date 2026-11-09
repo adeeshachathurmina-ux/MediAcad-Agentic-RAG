@@ -16,6 +16,9 @@ from src.retrieval.sparse_engine import (
     TFIDFAndBM25Engine,
     tokenize,
 )
+from src.retrieval.hybrid_retriever import (
+    HybridExplainableRetriever,
+)
 
 __all__ = [
     "vector_magnitude",
@@ -27,5 +30,6 @@ __all__ = [
     "hybrid_fuse_score",
     "TFIDFAndBM25Engine",
     "tokenize",
+    "HybridExplainableRetriever",
 ]
 
