@@ -8,7 +8,9 @@ env/
 # Secret API keys (NEVER commit to GitHub)
 .env
 
-# Local vector database & OS files
+# Local vector database, sessions & OS files
 chroma_db/
+data/sessions/*.json
+!data/sessions/.gitkeep
 .DS_Store
 Thumbs.db
