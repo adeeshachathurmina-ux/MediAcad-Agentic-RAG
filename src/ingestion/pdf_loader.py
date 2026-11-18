@@ -179,3 +179,4 @@ class PDFLoader:
 
         doc.close()
         return pages_data
+

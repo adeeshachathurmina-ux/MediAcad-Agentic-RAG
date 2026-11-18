@@ -10,5 +10,9 @@ env/
 
 # Local vector database & OS files
 chroma_db/
+data/chroma_db/
+data/model_cache/
+.pytest_cache/
+*.log
 .DS_Store
 Thumbs.db

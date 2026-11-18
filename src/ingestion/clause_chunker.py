@@ -162,9 +162,9 @@ class ClauseAwareChunker(BaseChunker):
             # Enriched metadata
             enriched_meta = self._enrich_metadata(segment_text, meta, clause_id, page_num)
 
-            # Generate stable chunk_id
+            # Generate strictly unique chunk_id
             safe_clause = re.sub(r'[^a-zA-Z0-9_\.]', '', clause_id.lower().replace(" ", "_"))
-            chunk_id = f"{doc_id}_p{page_num}_{safe_clause or 'c' + str(i)}"
+            chunk_id = f"{doc_id}_p{page_num}_{safe_clause or 'c'}_{i}"
 
             chunks.append(DocumentChunk(
                 chunk_id=chunk_id,
