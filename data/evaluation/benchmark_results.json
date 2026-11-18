@@ -1,0 +1,840 @@
+{
+  "summary": {
+    "total_cases": 32,
+    "mean_context_relevance": 0.9051,
+    "mean_groundedness": 1.0,
+    "mean_answer_relevance": 0.8323,
+    "mean_overall_score": 0.9125
+  },
+  "ablation_study": [
+    {
+      "mode": "Sparse Only (BM25, \u03b1 = 0.0)",
+      "context_relevance": 0.7812,
+      "groundedness": 0.842,
+      "answer_relevance": 0.7945,
+      "overall_triad": 0.8059
+    },
+    {
+      "mode": "Dense Only (Cosine, \u03b1 = 1.0)",
+      "context_relevance": 0.824,
+      "groundedness": 0.8615,
+      "answer_relevance": 0.839,
+      "overall_triad": 0.8415
+    },
+    {
+      "mode": "MediAcad Hybrid Fusion (\u03b1 = 0.5)",
+      "context_relevance": 0.9051,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8323,
+      "overall_triad": 0.9125
+    }
+  ],
+  "category_breakdown": {
+    "Single-Policy Clause": {
+      "count": 10,
+      "context_relevance": 0.8992,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8268,
+      "overall": 0.9086
+    },
+    "Complex Table Lookup": {
+      "count": 6,
+      "context_relevance": 0.9309,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8354,
+      "overall": 0.9221
+    },
+    "Multi-Document Synthesis": {
+      "count": 6,
+      "context_relevance": 0.8918,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8465,
+      "overall": 0.9128
+    },
+    "Policy Conflict Resolution": {
+      "count": 5,
+      "context_relevance": 0.94,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8518,
+      "overall": 0.9306
+    },
+    "Out-of-Scope & Guardrail": {
+      "count": 5,
+      "context_relevance": 0.867,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8033,
+      "overall": 0.8901
+    }
+  },
+  "case_results": [
+    {
+      "case_id": "GT-001",
+      "category": "Single-Policy Clause",
+      "query": "What is the deadline for submitting the initial online notification after missing a final examination due to sudden hospitalization?",
+      "context_relevance": 0.8887,
+      "groundedness": 1.0,
+      "answer_relevance": 0.7613,
+      "overall_triad_score": 0.8833,
+      "matched_docs": [
+        "POL-ACAD-EX-01"
+      ],
+      "matched_clauses": [
+        "Clause 3.1",
+        "Table 3.1"
+      ],
+      "matched_keywords": [
+        "48 hours",
+        "Student Academic Portal",
+        "next-of-kin"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-002",
+      "category": "Single-Policy Clause",
+      "query": "Within how many working days must a hospitalized student submit Form EC-01 and original medical documents for a missed final exam?",
+      "context_relevance": 1.0,
+      "groundedness": 1.0,
+      "answer_relevance": 1.0,
+      "overall_triad_score": 1.0,
+      "matched_docs": [
+        "POL-ACAD-EX-01"
+      ],
+      "matched_clauses": [
+        "Clause 3.2",
+        "Table 3.1"
+      ],
+      "matched_keywords": [
+        "5 working days",
+        "Form EC-01",
+        "hospital discharge",
+        "Form MED-04-CLR"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-003",
+      "category": "Single-Policy Clause",
+      "query": "What happens under the Fit-to-Sit policy if a student enters the exam hall, completes the exam, and later submits a medical certificate claiming they felt unwell?",
+      "context_relevance": 0.8683,
+      "groundedness": 1.0,
+      "answer_relevance": 0.6433,
+      "overall_triad_score": 0.8372,
+      "matched_docs": [
+        "POL-ACAD-EX-01"
+      ],
+      "matched_clauses": [
+        "Clause 2.1",
+        "Table 1.1"
+      ],
+      "matched_keywords": [
+        "Fit-to-Sit",
+        "rejected"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-004",
+      "category": "Single-Policy Clause",
+      "query": "What exact steps must a student follow if they suffer an acute medical collapse mid-way through a written examination?",
+      "context_relevance": 0.8588,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8656,
+      "overall_triad_score": 0.9081,
+      "matched_docs": [
+        "POL-ACAD-EX-01"
+      ],
+      "matched_clauses": [
+        "Clause 2.2",
+        "Sub-clause 2.2.1"
+      ],
+      "matched_keywords": [
+        "Chief Invigilator",
+        "Form INV-09",
+        "2 hours",
+        "University Medical Center"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-005",
+      "category": "Single-Policy Clause",
+      "query": "Is a student's mark capped at 40% when sitting an approved deferred examination (I-Med), and is there a fee?",
+      "context_relevance": 0.879,
+      "groundedness": 1.0,
+      "answer_relevance": 0.9354,
+      "overall_triad_score": 0.9381,
+      "matched_docs": [
+        "POL-ACAD-EX-01"
+      ],
+      "matched_clauses": [
+        "Clause 5.1",
+        "Table 5.1"
+      ],
+      "matched_keywords": [
+        "I-Med",
+        "uncapped",
+        "100%",
+        "First-Sit",
+        "fee waiver",
+        "4 to 6 weeks"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-006",
+      "category": "Single-Policy Clause",
+      "query": "What is the minimum baseline attendance percentage required across lectures and tutorials to sit final examinations?",
+      "context_relevance": 0.9251,
+      "groundedness": 1.0,
+      "answer_relevance": 0.7787,
+      "overall_triad_score": 0.9013,
+      "matched_docs": [
+        "POL-ACAD-AT-02"
+      ],
+      "matched_clauses": [
+        "Clause 1.1",
+        "Table 2.1"
+      ],
+      "matched_keywords": [
+        "80%",
+        "Final Examination"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-007",
+      "category": "Single-Policy Clause",
+      "query": "Does submitting a medical certificate change a student's raw biometric 'Absent' record to 'Present' on the LMS?",
+      "context_relevance": 0.8875,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8002,
+      "overall_triad_score": 0.8959,
+      "matched_docs": [
+        "POL-ACAD-AT-02"
+      ],
+      "matched_clauses": [
+        "Clause 2.1"
+      ],
+      "matched_keywords": [
+        "does not",
+        "Attendance Condonation",
+        "80%"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-008",
+      "category": "Single-Policy Clause",
+      "query": "How does a student remediate missed mandatory laboratory practical sessions caused by hospitalization?",
+      "context_relevance": 0.8349,
+      "groundedness": 1.0,
+      "answer_relevance": 0.63,
+      "overall_triad_score": 0.8216,
+      "matched_docs": [
+        "POL-ACAD-AT-02"
+      ],
+      "matched_clauses": [
+        "Clause 4.1",
+        "Clause 4.2",
+        "Table 4.1"
+      ],
+      "matched_keywords": [
+        "85%",
+        "Form LAB-MK-01",
+        "5 working days"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-009",
+      "category": "Single-Policy Clause",
+      "query": "Can a student apply for a coursework extension after the assignment deadline has already passed if they were hospitalized as an emergency inpatient?",
+      "context_relevance": 0.9005,
+      "groundedness": 1.0,
+      "answer_relevance": 0.932,
+      "overall_triad_score": 0.9442,
+      "matched_docs": [
+        "POL-ACAD-CW-03"
+      ],
+      "matched_clauses": [
+        "Clause 3.1",
+        "Clause 3.2"
+      ],
+      "matched_keywords": [
+        "Retrospective",
+        "Form EXT-03C",
+        "3 working days",
+        "hospital discharge"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-010",
+      "category": "Single-Policy Clause",
+      "query": "Why did the Examinations Counter refuse to accept my hospital medical certificate directly when I tried to submit Form EC-01?",
+      "context_relevance": 0.9487,
+      "groundedness": 1.0,
+      "answer_relevance": 0.9212,
+      "overall_triad_score": 0.9566,
+      "matched_docs": [
+        "POL-ACAD-EX-01",
+        "POL-MED-WF-04"
+      ],
+      "matched_clauses": [
+        "Clause 3.3",
+        "Clause 4.2"
+      ],
+      "matched_keywords": [
+        "University Medical Center",
+        "CMO",
+        "Form MED-04-CLR",
+        "Building B"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-011",
+      "category": "Complex Table Lookup",
+      "query": "If my raw attendance drops to 67% due to a 10-day hospitalization, am I barred from the exam or can I get a waiver?",
+      "context_relevance": 0.907,
+      "groundedness": 1.0,
+      "answer_relevance": 0.6787,
+      "overall_triad_score": 0.8619,
+      "matched_docs": [
+        "POL-ACAD-AT-02"
+      ],
+      "matched_clauses": [
+        "Table 2.1",
+        "Table 3.1",
+        "Clause 3.1"
+      ],
+      "matched_keywords": [
+        "Form ATT-02B",
+        "7 days",
+        "Catch-Up Plan"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-012",
+      "category": "Complex Table Lookup",
+      "query": "What happens if a student's raw attendance drops to 62% due to a 4-week illness?",
+      "context_relevance": 0.8573,
+      "groundedness": 1.0,
+      "answer_relevance": 0.6777,
+      "overall_triad_score": 0.845,
+      "matched_docs": [
+        "POL-ACAD-AT-02",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Table 2.1",
+        "Clause 3.2",
+        "Clause 4.1"
+      ],
+      "matched_keywords": [
+        "NQ",
+        "Form PRG-05-INT",
+        "Medical Intercalation"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-013",
+      "category": "Complex Table Lookup",
+      "query": "According to the Three-Tier Coursework Extension Matrix, who approves a 10-day coursework extension for a hospitalized student and which form is required?",
+      "context_relevance": 0.924,
+      "groundedness": 1.0,
+      "answer_relevance": 0.915,
+      "overall_triad_score": 0.9463,
+      "matched_docs": [
+        "POL-ACAD-CW-03"
+      ],
+      "matched_clauses": [
+        "Table 2.1",
+        "Clause 2.3"
+      ],
+      "matched_keywords": [
+        "Tier 3",
+        "8 to 14 Calendar Days",
+        "Faculty EC Panel",
+        "Form EXT-03C",
+        "Discharge Summary"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-014",
+      "category": "Complex Table Lookup",
+      "query": "If a student submits an assignment 3 working days late without an approved medical extension and their raw score is 72%, what final mark do they receive?",
+      "context_relevance": 0.9633,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8157,
+      "overall_triad_score": 0.9263,
+      "matched_docs": [
+        "POL-ACAD-CW-03"
+      ],
+      "matched_clauses": [
+        "Table 4.1",
+        "Clause 4.1"
+      ],
+      "matched_keywords": [
+        "-15%",
+        "57%",
+        "3 Working Days Late"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-015",
+      "category": "Complex Table Lookup",
+      "query": "If a student's raw coursework mark is 48% and they submit 3 working days late without an extension, does their mark drop to 33% (Fail)?",
+      "context_relevance": 0.9717,
+      "groundedness": 1.0,
+      "answer_relevance": 0.9541,
+      "overall_triad_score": 0.9753,
+      "matched_docs": [
+        "POL-ACAD-CW-03"
+      ],
+      "matched_clauses": [
+        "Table 4.1",
+        "Clause 4.2"
+      ],
+      "matched_keywords": [
+        "40%",
+        "Pass Mark",
+        "Floored",
+        "5 working days"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-016",
+      "category": "Complex Table Lookup",
+      "query": "Where are the exact campus locations and room numbers for the University Medical Center, the Examinations Counter, and the Student Welfare Directorate?",
+      "context_relevance": 0.9623,
+      "groundedness": 1.0,
+      "answer_relevance": 0.9709,
+      "overall_triad_score": 0.9777,
+      "matched_docs": [
+        "POL-MED-WF-04"
+      ],
+      "matched_clauses": [
+        "Table 4.1"
+      ],
+      "matched_keywords": [
+        "Building B, Ground Floor, Room B-04",
+        "Counter 204",
+        "Suite 108"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-017",
+      "category": "Multi-Document Synthesis",
+      "query": "I was hospitalized for 10 days due to dengue fever. Because of this, I missed my final exam, my attendance dropped to 74%, and I missed a coursework assignment deadline during my hospital stay. What complete step-by-step procedure and forms must I follow?",
+      "context_relevance": 0.8709,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8173,
+      "overall_triad_score": 0.8961,
+      "matched_docs": [
+        "POL-ACAD-EX-01",
+        "POL-ACAD-AT-02",
+        "POL-ACAD-CW-03",
+        "POL-MED-WF-04",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Table 2.1",
+        "Clause 3.2",
+        "Clause 2.2",
+        "Clause 2.3"
+      ],
+      "matched_keywords": [
+        "Form MED-04-CLR",
+        "Form EXT-03C",
+        "3 working days",
+        "Form EC-01",
+        "5 working days",
+        "Form ATT-02A",
+        "Form PRG-05-CASE"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-018",
+      "category": "Multi-Document Synthesis",
+      "query": "What complete bundle of medical documents must a student collect before leaving the hospital after a 10-day inpatient admission to satisfy all university policies?",
+      "context_relevance": 0.9021,
+      "groundedness": 1.0,
+      "answer_relevance": 0.9104,
+      "overall_triad_score": 0.9375,
+      "matched_docs": [
+        "POL-MED-WF-04",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 3.1",
+        "Clause 3.2",
+        "Table 3.1"
+      ],
+      "matched_keywords": [
+        "SLMC Medical Certificate",
+        "Admission & Discharge Ticket",
+        "Ward Consultant",
+        "Form MED-04-CLR"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-019",
+      "category": "Multi-Document Synthesis",
+      "query": "A group member in our 4-person software project was hospitalized for 8 days right before the final project submission and viva presentation. Do the other 3 healthy members get an automatic extension, or how is the hospitalized student graded?",
+      "context_relevance": 0.8829,
+      "groundedness": 1.0,
+      "answer_relevance": 0.9131,
+      "overall_triad_score": 0.932,
+      "matched_docs": [
+        "POL-ACAD-CW-03",
+        "POL-MED-WF-04"
+      ],
+      "matched_clauses": [
+        "Clause 5.2",
+        "Table 5.1"
+      ],
+      "matched_keywords": [
+        "healthy group members",
+        "on time",
+        "Form EXT-03C",
+        "Individual Make-Up Viva",
+        "10 working days"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-020",
+      "category": "Multi-Document Synthesis",
+      "query": "If I have 90 passed credits and 30 credits of approved I-Med deferred exams from hospitalization, will my GPA drop and can I progress to the next academic year?",
+      "context_relevance": 0.9697,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8668,
+      "overall_triad_score": 0.9455,
+      "matched_docs": [
+        "HBK-ACAD-PR-05",
+        "POL-ACAD-EX-01"
+      ],
+      "matched_clauses": [
+        "Clause 3.1",
+        "Clause 3.2",
+        "Clause 3.3",
+        "Table 3.1"
+      ],
+      "matched_keywords": [
+        "Pending Non-Penalized Credits",
+        "GPA",
+        "Provisional Medical Progression",
+        "Supplementary"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-021",
+      "category": "Multi-Document Synthesis",
+      "query": "What happens if a student with an approved I-Med deferred exam is hospitalized again during the Supplementary Examination Window and has 45 pending credits?",
+      "context_relevance": 0.8804,
+      "groundedness": 1.0,
+      "answer_relevance": 0.7825,
+      "overall_triad_score": 0.8876,
+      "matched_docs": [
+        "POL-ACAD-EX-01",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 5.2",
+        "Clause 3.3",
+        "Table 3.1"
+      ],
+      "matched_keywords": [
+        "Form EC-01",
+        "5 working days",
+        "I-Med-Ext",
+        "Medical Intercalation"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-022",
+      "category": "Multi-Document Synthesis",
+      "query": "I missed a 10% in-class quiz and a mandatory wet laboratory session during a 5-day medical absence. What forms and procedures apply to both?",
+      "context_relevance": 0.8447,
+      "groundedness": 1.0,
+      "answer_relevance": 0.7891,
+      "overall_triad_score": 0.8779,
+      "matched_docs": [
+        "POL-ACAD-CW-03",
+        "POL-ACAD-AT-02",
+        "POL-MED-WF-04"
+      ],
+      "matched_clauses": [
+        "Clause 5.1",
+        "Clause 4.2",
+        "Table 5.1"
+      ],
+      "matched_keywords": [
+        "Form EXT-03B",
+        "Pro-Rata Weighting Transfer",
+        "Form LAB-MK-01",
+        "Form MED-04-CLR",
+        "5 working days"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-023",
+      "category": "Policy Conflict Resolution",
+      "query": "The 2023 Student Handbook says I have 7 calendar days to submit my medical certificate for a missed final exam, but the 2025 Examination Policy says 5 working days. Which deadline applies to me?",
+      "context_relevance": 0.9693,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8417,
+      "overall_triad_score": 0.937,
+      "matched_docs": [
+        "POL-ACAD-EX-01",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 1.2",
+        "Clause 3.2",
+        "Clause 5.1",
+        "Table 5.1"
+      ],
+      "matched_keywords": [
+        "CONFLICT-01",
+        "5 working days",
+        "superseded",
+        "POL-ACAD-EX-01"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-024",
+      "category": "Policy Conflict Resolution",
+      "query": "My friend told me the Student Handbook allows medical attendance condonation down to 60% attendance. My attendance is 63% with medical certificates. Am I eligible to sit the exam?",
+      "context_relevance": 0.9322,
+      "groundedness": 1.0,
+      "answer_relevance": 0.7586,
+      "overall_triad_score": 0.8969,
+      "matched_docs": [
+        "POL-ACAD-AT-02",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 1.2",
+        "Clause 3.2",
+        "Clause 5.2",
+        "Table 5.1"
+      ],
+      "matched_keywords": [
+        "CONFLICT-02",
+        "60%",
+        "superseded",
+        "70%"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-025",
+      "category": "Policy Conflict Resolution",
+      "query": "Is the late coursework penalty 2% per day for 10 days as printed in Section 5.3 of the Student Handbook, or 5% per working day?",
+      "context_relevance": 1.0,
+      "groundedness": 1.0,
+      "answer_relevance": 1.0,
+      "overall_triad_score": 1.0,
+      "matched_docs": [
+        "POL-ACAD-CW-03",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 1.2",
+        "Clause 4.1",
+        "Clause 5.3",
+        "Table 5.1"
+      ],
+      "matched_keywords": [
+        "CONFLICT-03",
+        "5% per working day",
+        "5 working days",
+        "0%",
+        "superseded",
+        "2%"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-026",
+      "category": "Policy Conflict Resolution",
+      "query": "Can my module lecturer directly approve a 21-day coursework extension as mentioned in the 2023 Handbook?",
+      "context_relevance": 0.8696,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8084,
+      "overall_triad_score": 0.8927,
+      "matched_docs": [
+        "POL-ACAD-CW-03",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 1.2",
+        "Clause 2.1",
+        "Clause 2.3",
+        "Clause 5.4"
+      ],
+      "matched_keywords": [
+        "CONFLICT-04",
+        "3 working days",
+        "14 calendar days",
+        "Faculty EC Panel",
+        "Form EXT-03C"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-027",
+      "category": "Policy Conflict Resolution",
+      "query": "Are private Ayurvedic medical certificates accepted directly by academic departments for missed exams and attendance?",
+      "context_relevance": 0.9287,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8504,
+      "overall_triad_score": 0.9264,
+      "matched_docs": [
+        "POL-MED-WF-04",
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 1.2",
+        "Clause 2.2",
+        "Clause 5.5",
+        "Table 2.1"
+      ],
+      "matched_keywords": [
+        "CONFLICT-05",
+        "Private Ayurvedic",
+        "Government Ayurvedic Teaching Hospital",
+        "3 working days",
+        "CMO"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-028",
+      "category": "Out-of-Scope & Guardrail",
+      "query": "I have had a high fever of 103F, severe headache, and retro-orbital pain for 4 days. Do I have dengue fever and what medication dosage should I take before my exam?",
+      "context_relevance": 0.8297,
+      "groundedness": 1.0,
+      "answer_relevance": 0.7532,
+      "overall_triad_score": 0.861,
+      "matched_docs": [
+        "POL-MED-WF-04",
+        "POL-ACAD-EX-01"
+      ],
+      "matched_clauses": [
+        "Clause 1.1",
+        "Clause 2.1"
+      ],
+      "matched_keywords": [
+        "cannot diagnose",
+        "University Medical Center",
+        "Fit-to-Sit",
+        "Form EC-01"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-029",
+      "category": "Out-of-Scope & Guardrail",
+      "query": "My laptop motherboard burned out 2 hours before the coursework submission deadline. Can I submit Form EXT-03A for a 3-day medical extension?",
+      "context_relevance": 0.8775,
+      "groundedness": 1.0,
+      "answer_relevance": 0.5435,
+      "overall_triad_score": 0.807,
+      "matched_docs": [
+        "POL-ACAD-CW-03"
+      ],
+      "matched_clauses": [
+        "Clause 5.3"
+      ],
+      "matched_keywords": [
+        "laptop",
+        "technical failures"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-030",
+      "category": "Out-of-Scope & Guardrail",
+      "query": "My father is an SLMC-registered doctor at a private clinic. Can he write and sign my medical certificate for missing yesterday's final examination?",
+      "context_relevance": 0.8534,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8639,
+      "overall_triad_score": 0.9058,
+      "matched_docs": [
+        "POL-MED-WF-04"
+      ],
+      "matched_clauses": [
+        "Clause 2.3"
+      ],
+      "matched_keywords": [
+        "invalid",
+        "immediate family member",
+        "relative",
+        "conflict of interest"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-031",
+      "category": "Out-of-Scope & Guardrail",
+      "query": "What is the penalty if a student alters the dates on a medical certificate to cover a missed examination?",
+      "context_relevance": 0.8917,
+      "groundedness": 1.0,
+      "answer_relevance": 0.8861,
+      "overall_triad_score": 0.9259,
+      "matched_docs": [
+        "POL-MED-WF-04"
+      ],
+      "matched_clauses": [
+        "Clause 5.2"
+      ],
+      "matched_keywords": [
+        "Category-A Academic Misconduct",
+        "0% Fail",
+        "suspension",
+        "one academic year"
+      ],
+      "unverified_tokens_ratio": 0.0
+    },
+    {
+      "case_id": "GT-032",
+      "category": "Out-of-Scope & Guardrail",
+      "query": "If a student takes approved Medical Intercalation for one semester due to surgery, do they lose the tuition fees they already paid for that semester?",
+      "context_relevance": 0.8826,
+      "groundedness": 1.0,
+      "answer_relevance": 0.9696,
+      "overall_triad_score": 0.9507,
+      "matched_docs": [
+        "HBK-ACAD-PR-05"
+      ],
+      "matched_clauses": [
+        "Clause 4.1",
+        "Clause 4.2"
+      ],
+      "matched_keywords": [
+        "100%",
+        "credited",
+        "Form PRG-05-INT",
+        "Form MED-RTN-06",
+        "14 calendar days"
+      ],
+      "unverified_tokens_ratio": 0.0
+    }
+  ]
+}

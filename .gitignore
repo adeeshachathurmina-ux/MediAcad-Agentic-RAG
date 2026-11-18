@@ -8,10 +8,12 @@ env/
 # Secret API keys (NEVER commit to GitHub)
 .env
 
-# Local vector database & OS files
+# Local vector database, sessions & OS files
 chroma_db/
 data/chroma_db/
 data/model_cache/
+data/sessions/*.json
+!data/sessions/.gitkeep
 .pytest_cache/
 *.log
 .DS_Store
