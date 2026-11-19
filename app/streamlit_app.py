@@ -36,6 +36,9 @@ from src.interfaces.contracts import (
 )
 from src.evaluation.metrics import RAGTriadEvaluator, tokenize, lexical_cosine_similarity
 from src.evaluation.run_benchmark import run_full_benchmark
+from src.ingestion.clause_chunker import ClauseAwareChunker
+from src.retrieval.hybrid_retriever import HybridExplainableRetriever
+from src.agent.mediacad_agent import MediAcadAgent
 
 st.set_page_config(
     page_title="MediAcad | Explainable Agentic RAG",
@@ -268,7 +271,7 @@ def _get_supplementary_policy_chunks() -> List[DocumentChunk]:
 
 @st.cache_data
 def load_corpus_chunks() -> List[DocumentChunk]:
-    """Load processed chunks if available, falling back to sample_chunks.json + supplementary clauses."""
+    """Load curated high-precision policy chunks alongside Member 1's processed corpus fallback."""
     processed_path = PROJECT_ROOT / "data" / "processed" / "chunks.json"
     fixture_path = PROJECT_ROOT / "data" / "fixtures" / "sample_chunks.json"
     if processed_path.exists():
@@ -282,6 +285,16 @@ def load_corpus_chunks() -> List[DocumentChunk]:
         if extra.chunk_id not in existing_ids:
             base_chunks.append(extra)
     return base_chunks
+
+
+@st.cache_data
+def load_ingested_pdf_chunks() -> List[DocumentChunk]:
+    """Load Member 1's full structure-aware PDF corpus from data/processed_chunks.json."""
+    member1_path = PROJECT_ROOT / "data" / "processed_chunks.json"
+    if member1_path.exists():
+        raw = json.loads(member1_path.read_text(encoding="utf-8"))
+        return [DocumentChunk(**item) for item in raw]
+    return load_corpus_chunks()
 
 
 @st.cache_data
@@ -1312,11 +1325,13 @@ with tab4:
     st.dataframe(conflict_table, use_container_width=True, hide_index=True)
 
     st.markdown("#### 🔍 Interactive Policy Clause Explorer")
+    explorer_chunks = load_ingested_pdf_chunks()
+    st.caption(f"Showing **{len(explorer_chunks)}** structure-aware policy chunks extracted from the 5 official Senate PDFs (`data/processed_chunks.json`).")
     selected_doc = st.selectbox(
         "Filter Indexed Clauses by Policy Document:",
-        ["All Documents"] + sorted({c.doc_id for c in chunks}),
+        ["All Documents"] + sorted({c.doc_id for c in explorer_chunks}),
     )
-    filtered_chunks = [c for c in chunks if selected_doc == "All Documents" or c.doc_id == selected_doc]
+    filtered_chunks = [c for c in explorer_chunks if selected_doc == "All Documents" or c.doc_id == selected_doc]
     for c in filtered_chunks:
         with st.expander(f"{c.doc_id} ({c.policy_version}) — {c.section_title} | {c.clause_id} (Page {c.page_number})"):
             st.write(c.text)
