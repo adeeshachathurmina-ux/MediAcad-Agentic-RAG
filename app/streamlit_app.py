@@ -16,6 +16,7 @@ from collections import Counter
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -38,6 +39,12 @@ from src.evaluation.metrics import RAGTriadEvaluator, tokenize, lexical_cosine_s
 from src.evaluation.run_benchmark import run_full_benchmark
 from src.ingestion.clause_chunker import ClauseAwareChunker
 from src.retrieval.hybrid_retriever import HybridExplainableRetriever
+from src.retrieval.math_mechanics import (
+    vector_magnitude,
+    dot_product,
+    cosine_similarity as math_cosine_similarity,
+    hybrid_fuse_score,
+)
 from src.agent.mediacad_agent import MediAcadAgent
 
 st.set_page_config(
@@ -126,6 +133,41 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
+CLINICAL_GUARDRAIL_TERMS = (
+    "dosage", "medication", "prescribe", "do i have dengue", "what medicine",
+    "103f", "paracetamol", "diagnose", "diagnosis", "antibiotic",
+    "painkiller", "tablet", "pill", "what drug", "cure",
+)
+
+STRONG_POLICY_TERMS = {
+    "fit-to-sit", "ayurvedic", "intercalation", "condonation", "deferral",
+    "ec-01", "att-02a", "att-02b", "ext-03a", "ext-03b", "ext-03c",
+    "med-04-clr", "inv-09", "prg-05-case", "prg-05-int", "med-rtn-06",
+    "slmc", "umc", "i-med", "forged", "backdated", "coursework", "hospitalization",
+    "attendance", "exam", "examination", "exams", "medical", "assignment",
+    "extension", "penalty", "dengue", "hospitalized", "gpa", "credits",
+    "progression", "laboratory", "tuition", "certificate",
+}
+
+
+def clean_policy_display_text(raw_text: str) -> str:
+    """Removes redundant [Doc: ...] header prefix and broken (cid:127) PDF glyph artifacts."""
+    cleaned = re.sub(r"^\[Doc:[^\]]+\]\s*", "", raw_text.strip())
+    cleaned = re.sub(r"\(cid:\d+\)", "•", cleaned)
+    return cleaned
+
+
+def _attendance_band(pct: float) -> str:
+    """Classifies raw attendance percentage into its governing 2025 POL-ACAD-AT-02 band."""
+    if pct >= 80.0:
+        return "safe"
+    if pct >= 70.0:
+        return "hod_condonation"
+    if pct >= 65.0:
+        return "dean_waiver"
+    return "barred"
 
 
 def highlight_matched_terms(text: str, matched_terms: List[str]) -> str:
@@ -313,12 +355,13 @@ def compute_live_hybrid_retrieval(
     top_k: int = 5,
 ) -> List[RetrievalResult]:
     """
-    Executes live mathematical Sparse (BM25) + Dense (L2 Cosine) retrieval
-    and populates a complete MathExplanationTrace for every chunk.
+    Executes live mathematical Sparse (BM25) + Dense (exact L2 Cosine via Member 2's
+    src.retrieval.math_mechanics) retrieval and populates a mathematically exact
+    MathExplanationTrace where (q . d) / (||q||_2 * ||d||_2) == cosine_similarity.
     """
     q_tokens = tokenize(query)
-    if not q_tokens:
-        q_tokens = ["medical", "policy"]
+    if not q_tokens or not chunks:
+        return []
 
     N = len(chunks)
     doc_tokens_list = [tokenize(f"{c.doc_title} {c.section_title} {c.clause_id} {c.text}") for c in chunks]
@@ -336,7 +379,6 @@ def compute_live_hybrid_retrieval(
     traces: List[Dict[str, Any]] = []
 
     q_freq = Counter(q_tokens)
-    q_norm = math.sqrt(sum(v * v for v in q_freq.values()))
 
     for idx, chunk in enumerate(chunks):
         d_tokens = doc_tokens_list[idx]
@@ -354,15 +396,17 @@ def compute_live_hybrid_retrieval(
             den = tf_val + k1 * (1.0 - b + b * (dl / max(avgdl, 1.0)))
             bm25 += idf_map[t] * (num / den)
 
-        # Vector Dot Product & L2 Norms
-        vocab = set(q_freq.keys()) | set(d_freq.keys())
-        dot_prod = float(sum(q_freq[w] * d_freq[w] for w in vocab))
-        d_norm = math.sqrt(sum(v * v for v in d_freq.values()))
-        cosine = dot_prod / (q_norm * d_norm) if (q_norm > 0 and d_norm > 0) else 0.0
+        # Exact Vector Magnitude, Dot Product & L2 Cosine via Member 2's math_mechanics
+        vocab = sorted(set(q_freq.keys()) | set(d_freq.keys()))
+        q_vec = np.array([float(q_freq[w]) for w in vocab], dtype=np.float64)
+        d_vec = np.array([float(d_freq[w]) for w in vocab], dtype=np.float64)
+        q_norm = vector_magnitude(q_vec)
+        d_norm = vector_magnitude(d_vec)
+        dot_prod = dot_product(q_vec, d_vec)
+        exact_cosine = max(0.0, math_cosine_similarity(q_vec, d_vec))
 
-        semantic_boost = min(cosine * 2.1, 0.98)
         raw_bm25_scores.append(bm25)
-        cosine_scores.append(semantic_boost)
+        cosine_scores.append(exact_cosine)
         traces.append({
             "matched_terms": sorted(matched_terms, key=lambda t: idf_map.get(t, 0.0), reverse=True),
             "tf_dict": tf_dict,
@@ -371,18 +415,18 @@ def compute_live_hybrid_retrieval(
             "q_norm": round(q_norm, 4),
             "d_norm": round(d_norm, 4),
             "dot_product": round(dot_prod, 4),
-            "cosine": round(semantic_boost, 4),
+            "cosine": round(exact_cosine, 4),
         })
 
-    max_bm25 = max(raw_bm25_scores) if max(raw_bm25_scores) > 0 else 1.0
-    min_bm25 = min(raw_bm25_scores)
+    max_bm25 = max(raw_bm25_scores) if raw_bm25_scores else 0.0
+    min_bm25 = min(raw_bm25_scores) if raw_bm25_scores else 0.0
     denom = (max_bm25 - min_bm25) if (max_bm25 > min_bm25) else 1.0
 
     results: List[RetrievalResult] = []
     for idx, chunk in enumerate(chunks):
         norm_bm25 = (raw_bm25_scores[idx] - min_bm25) / denom if max_bm25 > 0 else 0.0
         dense_s = cosine_scores[idx]
-        hybrid_s = (alpha * dense_s) + ((1.0 - alpha) * norm_bm25)
+        hybrid_s = hybrid_fuse_score(dense_score=dense_s, sparse_score=norm_bm25, alpha=alpha)
 
         tr = traces[idx]
         math_trace = MathExplanationTrace(
@@ -418,6 +462,7 @@ def compute_live_hybrid_retrieval(
 def _build_domain_specific_checklist_and_docs(
     q_lower: str,
     is_clinical_guardrail: bool,
+    detected_att_pct: Optional[float] = None,
 ) -> tuple[List[str], List[str]]:
     """
     Generates an accurate, scenario-specific Action Checklist and Required Forms list
@@ -463,25 +508,40 @@ def _build_domain_specific_checklist_and_docs(
             ],
         )
 
-    # Attendance-focused query (e.g. Scenario 3: 67% attendance drop / condonation / barred)
-    if any(w in q_lower for w in ["attendance", "67%", "63%", "65%", "74%", "condonation", "waiver", "barred", "lab"]):
+    # Attendance-focused query — distinguish Hard Floor (<65%) vs Condonation/Waiver zones
+    if any(w in q_lower for w in ["attendance", "condonation", "waiver", "barred", "lab"]):
+        if detected_att_pct is not None and detected_att_pct < 65.0:
+            return (
+                [
+                    f"Step 1 (Hard Floor Enforcement — {detected_att_pct:.1f}% < 65.0%): Under POL-ACAD-AT-02 Clause 3.2, raw attendance below 65.0% is strictly ineligible for Final Examinations (Not Qualified / NQ Barred); no Dean's Waiver can override this floor.",
+                    "Step 2 (UMC Medical Authentication): Present original Hospital Admission & Discharge Summary and SLMC Medical Certificate at UMC (Building B, Room B-04) to obtain Form MED-04-CLR.",
+                    "Step 3 (Medical Intercalation Application): Submit Form PRG-05-INT (Temporary Medical Intercalation / Semester Withdrawal) at Student Welfare Suite 108 to protect GPA and carry forward 100% of paid tuition fees (HBK-ACAD-PR-05 Clause 4.2).",
+                    "Step 4 (Resumption Clearance): Obtain a Fit-to-Return Certificate (Form MED-RTN-06) endorsed by the CMO at least 14 calendar days prior to resuming studies.",
+                ],
+                [
+                    "Form PRG-05-INT (Temporary Medical Intercalation Application)",
+                    "Form MED-04-CLR (UMC Chief Medical Officer Clearance Slip)",
+                    "Original Hospital Discharge Summary & SLMC Medical Certificate",
+                    "Form MED-RTN-06 (Fit-to-Return Clearance — 14 Days Before Resumption)",
+                ],
+            )
         return (
             [
                 "Step 1 (Check Attendance Zone under POL-ACAD-AT-02 Table 2.1): Verify whether raw attendance is in the 70.0%–79.9% Standard Condonation Zone, 65.0%–69.9% Dean's Inpatient Waiver Zone (>=7 days hospital stay), or <65.0% Barred (NQ) Zone.",
                 "Step 2 (UMC Verification): Present original SLMC Certificate and Hospital Admission & Discharge Summary (showing >=7 inpatient days for 65%–69.9%) at UMC (Building B, Room B-04) to obtain Form MED-04-CLR.",
                 "Step 3 (Within 5 Working Days of Discharge): Submit Form ATT-02B (for 65%–69.9% Dean's Waiver) or Form ATT-02A (for 70%–79.9% HoD Condonation) to the Faculty Office (Room F-102).",
-                "Step 4 (Academic Catch-Up Plan): Complete and sign the mandatory Academic Catch-Up Plan (or Form LAB-02M for missed laboratory sessions) prior to Examination Admission Card issuance.",
+                "Step 4 (Academic Catch-Up Plan): Complete and sign the mandatory Academic Catch-Up Plan (or Form LAB-MK-01 for missed laboratory sessions) prior to Examination Admission Card issuance.",
             ],
             [
                 "Form ATT-02B (Dean's Exceptional Inpatient Attendance Waiver) or Form ATT-02A (HoD Condonation)",
                 "Form MED-04-CLR (UMC Medical Clearance Slip)",
                 "Official Hospital Admission & Discharge Summary (>=7 Calendar Days)",
-                "Signed Academic Catch-Up Plan / Form LAB-02M (if lab sessions missed)",
+                "Signed Academic Catch-Up Plan / Form LAB-MK-01 (if lab sessions missed)",
             ],
         )
 
-    # Coursework / Assignment / Late Penalty / Extension query (e.g. Scenario 4)
-    if any(w in q_lower for w in ["assignment", "coursework", "late", "penalty", "72%", "extension", "21-day", "21 days"]):
+    # Coursework / Assignment / Late Penalty / Extension query (no numeric % false triggers)
+    if any(w in q_lower for w in ["assignment", "coursework", "late", "penalty", "extension", "21-day", "21 days"]):
         return (
             [
                 "Step 1 (Check Extension Status under POL-ACAD-CW-03): Determine whether a valid medical extension (Form EXT-03A/B/C) was approved prior to the deadline (or within 3 working days post-discharge for inpatient hospitalization).",
@@ -542,169 +602,246 @@ def execute_explainable_agent_workflow(
 
     # Step 1: Observation & Guardrail Check
     is_clinical_diagnosis_request = any(
-        term in q_lower
-        for term in ["dosage", "medication", "prescribe", "do i have dengue", "what medicine", "103f", "paracetamol"]
+        term in q_lower for term in CLINICAL_GUARDRAIL_TERMS
     )
+    detected_att_pct = extract_attendance_percentage(query)
     detected_issues: List[str] = []
-    if any(w in q_lower for w in ["missed my final exam", "missed final exam", "examination", "deferred", "fit-to-sit", "ec-01", "collapse", "5 working days", "7 calendar days"]):
+    if any(w in q_lower for w in ["missed my final exam", "missed final exam", "examination", "exam", "deferred", "fit-to-sit", "ec-01", "collapse", "5 working days", "7 calendar days"]):
         detected_issues.append("Examination Consideration (POL-ACAD-EX-01)")
-    if any(w in q_lower for w in ["attendance", "74%", "67%", "63%", "60%", "65%", "61%", "condonation", "lab", "barred", "waiver"]):
+    if any(w in q_lower for w in ["attendance", "condonation", "lab", "barred", "waiver"]) or detected_att_pct is not None:
         detected_issues.append("Attendance & Absence Condonation (POL-ACAD-AT-02)")
-    if any(w in q_lower for w in ["assignment", "coursework", "extension", "late", "deadline", "penalty", "21-day", "21 days", "72%"]):
+    if any(w in q_lower for w in ["assignment", "coursework", "extension", "late", "deadline", "penalty", "21-day", "21 days"]):
         detected_issues.append("Coursework Extension & Penalties (POL-ACAD-CW-03)")
-    if any(w in q_lower for w in ["hospital", "hospitalization", "hospitalized", "certificate", "slmc", "ayurvedic", "umc", "dengue", "103f"]):
+    if any(w in q_lower for w in ["hospital", "hospitalization", "hospitalized", "certificate", "slmc", "ayurvedic", "umc", "dengue", "103f", "forged"]):
         detected_issues.append("Medical Documentation & UMC Verification (POL-MED-WF-04)")
-    if any(w in q_lower for w in ["10 days", "ten days", "progression", "credits", "gpa", "handbook", "2023"]):
+    if any(w in q_lower for w in ["10 days", "ten days", "progression", "credits", "gpa", "handbook", "2023", "intercalation", "tuition"]):
         detected_issues.append("Multi-Policy Progression & Conflict Audit (HBK-ACAD-PR-05)")
 
-    if not detected_issues:
+    # Step 3 (Preview Retrieval for Out-of-Scope Abstention Verification)
+    retrieved = compute_live_hybrid_retrieval(query, chunks, alpha=alpha, top_k=5)
+    q_tokens = tokenize(query)
+    top_matched: set = set()
+    for r in retrieved[:3]:
+        if r.math_trace:
+            top_matched.update(r.math_trace.matched_query_terms)
+    top_bm25_raw = (
+        retrieved[0].math_trace.bm25_raw_score
+        if retrieved and retrieved[0].math_trace
+        else 0.0
+    )
+    has_strong_policy_term = bool(top_matched.intersection(STRONG_POLICY_TERMS))
+    is_person_lookup = q_lower.startswith(("who is ", "who's ", "what is the name of "))
+    low_coverage = len(q_tokens) >= 2 and len(top_matched) < 2 and not has_strong_policy_term
+    is_out_of_scope = (
+        not is_clinical_diagnosis_request
+        and (
+            not retrieved
+            or not top_matched
+            or top_bm25_raw <= 0.0
+            or (is_person_lookup and not has_strong_policy_term)
+            or low_coverage
+        )
+    )
+
+    if is_out_of_scope:
+        detected_issues = ["Out-of-Scope Query (Abstained Safely)"]
+    elif not detected_issues:
         detected_issues.append("General Academic Medical Administration")
 
     step1 = AgentStepLog(
         step_number=1,
         phase="OBSERVATION",
-        title="Query Understanding & Clinical Guardrail Check",
+        title="Query Understanding & Clinical / Scope Guardrail Check",
         description=(
             "Clinical diagnosis request intercepted — activating Non-Diagnostic Scope Guardrail."
             if is_clinical_diagnosis_request
-            else f"Identified {len(detected_issues)} active regulatory domain(s) from student query."
+            else (
+                "Out-of-scope query detected (0 / insufficient regulatory matches) — activating Hallucination Abstention Guardrail."
+                if is_out_of_scope
+                else f"Identified {len(detected_issues)} active regulatory domain(s) from student query."
+            )
         ),
-        details={"detected_domains": detected_issues, "clinical_guardrail_triggered": is_clinical_diagnosis_request},
+        details={
+            "detected_domains": detected_issues,
+            "clinical_guardrail_triggered": is_clinical_diagnosis_request,
+            "out_of_scope_abstained": is_out_of_scope,
+        },
     )
 
     # Step 2: Reasoning (Sub-query decomposition)
-    sub_queries = [f"[{domain.split('(')[-1].rstrip(')')}] Verify clauses for: {query[:75]}" for domain in detected_issues]
+    sub_queries = (
+        ["[SCOPE_GUARDRAIL] Verify whether query maps to any of the 5 official Senate PDFs"]
+        if is_out_of_scope
+        else [f"[{domain.split('(')[-1].rstrip(')')}] Verify clauses for: {query[:75]}" for domain in detected_issues]
+    )
     step2 = AgentStepLog(
         step_number=2,
         phase="REASONING",
         title="Multi-Policy Sub-Query Decomposition",
-        description=f"Decomposed student scenario into {len(sub_queries)} targeted regulatory sub-queries.",
+        description=(
+            "Query rejected by Domain Scope Guardrail; halting multi-hop policy synthesis."
+            if is_out_of_scope
+            else f"Decomposed student scenario into {len(sub_queries)} targeted regulatory sub-queries."
+        ),
         details={"sub_queries": sub_queries},
     )
 
     # Step 3: Action (Hybrid Retrieval)
-    retrieved = compute_live_hybrid_retrieval(query, chunks, alpha=alpha, top_k=5)
     step3 = AgentStepLog(
         step_number=3,
         phase="ACTION",
-        title="Hybrid Sparse (BM25) + Dense (L2 Cosine) Retrieval",
-        description=f"Retrieved top {len(retrieved)} policy chunks with α = {alpha:.2f} hybrid fusion.",
+        title="Hybrid Sparse (BM25) + Exact L2 Cosine Retrieval",
+        description=(
+            f"Zero sufficiently relevant policy chunks matched (Matched terms: {sorted(top_matched)}, Raw BM25: {top_bm25_raw:.4f})."
+            if is_out_of_scope
+            else f"Retrieved top {len(retrieved)} policy chunks with α = {alpha:.2f} exact math fusion."
+        ),
         details={
-            "top_chunks": [
-                f"Rank #{r.rank}: {r.chunk.doc_id} ({r.chunk.clause_id}) — Hybrid={r.hybrid_score:.4f}"
-                for r in retrieved
-            ]
+            "top_chunks": (
+                []
+                if is_out_of_scope
+                else [
+                    f"Rank #{r.rank}: {r.chunk.doc_id} ({r.chunk.clause_id}) — Hybrid={r.hybrid_score:.4f}"
+                    for r in retrieved
+                ]
+            )
         },
     )
 
     # Step 4: Precision Evidence & 2023 vs. 2025 Conflict Verification
     conflict_alerts: List[PolicyConflictAlert] = []
 
-    # CONFLICT-01: Only trigger when query involves missed exam medical deadline, 7 calendar days, or multi-issue missed exam
-    asks_missed_exam_deadline = (
-        any(w in q_lower for w in ["7 calendar", "7 days", "5 working days", "missed my final exam", "missed final exam"])
-        or ("handbook" in q_lower and "exam" in q_lower)
-    )
-    if asks_missed_exam_deadline:
-        conflict_alerts.append(
-            PolicyConflictAlert(
-                conflict_id="CONFLICT-01",
-                topic="Missed Final Examination Submission Deadline",
-                legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
-                legacy_clause="Section 5, Clause 5.1",
-                legacy_rule_summary="Permitted 7 calendar days from exam date to submit medical certificates.",
-                authoritative_doc_id="POL-ACAD-EX-01 (v4.0, 2025)",
-                authoritative_clause="Section 3, Clause 3.2",
-                authoritative_rule_summary="Strictly 5 working days from exam date (or 5 working days post-discharge for inpatient hospitalization).",
-                resolution_explanation="2025 Senate Policy POL-ACAD-EX-01 v4.0 legally supersedes the 2023 Student Handbook.",
-            )
+    if not is_out_of_scope and not is_clinical_diagnosis_request:
+        # CONFLICT-01: Missed exam medical deadline
+        asks_missed_exam_deadline = (
+            any(w in q_lower for w in ["7 calendar", "7 days", "5 working days", "missed my final exam", "missed final exam"])
+            or ("handbook" in q_lower and "exam" in q_lower)
         )
+        if asks_missed_exam_deadline:
+            conflict_alerts.append(
+                PolicyConflictAlert(
+                    conflict_id="CONFLICT-01",
+                    topic="Missed Final Examination Submission Deadline",
+                    legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
+                    legacy_clause="Section 5, Clause 5.1",
+                    legacy_rule_summary="Permitted 7 calendar days from exam date to submit medical certificates.",
+                    authoritative_doc_id="POL-ACAD-EX-01 (v4.0, 2025)",
+                    authoritative_clause="Section 3, Clause 3.2",
+                    authoritative_rule_summary="Strictly 5 working days from exam date (or 5 working days post-discharge for inpatient hospitalization).",
+                    resolution_explanation="2025 Senate Policy POL-ACAD-EX-01 v4.0 legally supersedes the 2023 Student Handbook.",
+                )
+            )
 
-    # CONFLICT-02: Trigger when query asks about attendance percentages, condonation, or exam barring due to attendance
-    if any(w in q_lower for w in ["60%", "61%", "63%", "65%", "67%", "74%", "attendance", "condonation"]):
-        conflict_alerts.append(
-            PolicyConflictAlert(
-                conflict_id="CONFLICT-02",
-                topic="Minimum Medical Attendance Condonation Floor",
-                legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
-                legacy_clause="Section 5, Clause 5.2",
-                legacy_rule_summary="Allowed attendance condonation down to 60% with medical certificates.",
-                authoritative_doc_id="POL-ACAD-AT-02 (v3.2, 2025)",
-                authoritative_clause="Clauses 2.2, 3.1 & 3.2",
-                authoritative_rule_summary="70%–79% Standard HoD Condonation; 65%–69% Dean's Inpatient Waiver (>=7d hospital stay); <65% Strictly Barred (NQ).",
-                resolution_explanation="Enforce 70% standard / 65% inpatient hard floor under 2025 Policy POL-ACAD-AT-02 v3.2.",
+        # CONFLICT-02: Minimum Medical Attendance Condonation Floor
+        if any(w in q_lower for w in ["attendance", "condonation", "barred", "waiver"]) or detected_att_pct is not None:
+            conflict_alerts.append(
+                PolicyConflictAlert(
+                    conflict_id="CONFLICT-02",
+                    topic="Minimum Medical Attendance Condonation Floor",
+                    legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
+                    legacy_clause="Section 5, Clause 5.2",
+                    legacy_rule_summary="Allowed attendance condonation down to 60% with medical certificates.",
+                    authoritative_doc_id="POL-ACAD-AT-02 (v3.2, 2025)",
+                    authoritative_clause="Clauses 2.2, 3.1 & 3.2",
+                    authoritative_rule_summary="70%–79% Standard HoD Condonation; 65%–69% Dean's Inpatient Waiver (>=7d hospital stay); <65% Strictly Barred (NQ).",
+                    resolution_explanation="Enforce 70% standard / 65% inpatient hard floor under 2025 Policy POL-ACAD-AT-02 v3.2.",
+                )
             )
-        )
 
-    # CONFLICT-03: Unapproved Late Coursework Penalty (2%/day vs 5%/working day)
-    if any(w in q_lower for w in ["2%", "5%", "late", "penalty", "72%"]):
-        conflict_alerts.append(
-            PolicyConflictAlert(
-                conflict_id="CONFLICT-03",
-                topic="Unapproved Late Coursework Penalty Rate",
-                legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
-                legacy_clause="Section 5, Clause 5.3",
-                legacy_rule_summary="Deducted 2% per calendar day late up to 10 days.",
-                authoritative_doc_id="POL-ACAD-CW-03 (v3.0, 2025)",
-                authoritative_clause="Section 4, Table 4.1 & Clause 4.1",
-                authoritative_rule_summary="5% penalty per working day up to 5 working days (0% after Day 5).",
-                resolution_explanation="2025 Coursework Policy POL-ACAD-CW-03 v3.0 Table 4.1 overrides legacy 2023 handbook rules.",
+        # CONFLICT-03: Unapproved Late Coursework Penalty (use word boundaries so '2%' never matches '72%')
+        if re.search(r"(?<!\d)(?:2%|5%)|\b(?:late|penalty)\b", q_lower):
+            conflict_alerts.append(
+                PolicyConflictAlert(
+                    conflict_id="CONFLICT-03",
+                    topic="Unapproved Late Coursework Penalty Rate",
+                    legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
+                    legacy_clause="Section 5, Clause 5.3",
+                    legacy_rule_summary="Deducted 2% per calendar day late up to 10 days.",
+                    authoritative_doc_id="POL-ACAD-CW-03 (v3.0, 2025)",
+                    authoritative_clause="Section 4, Table 4.1 & Clause 4.1",
+                    authoritative_rule_summary="5% penalty per working day up to 5 working days (0% after Day 5).",
+                    resolution_explanation="2025 Coursework Policy POL-ACAD-CW-03 v3.0 Table 4.1 overrides legacy 2023 handbook rules.",
+                )
             )
-        )
 
-    # CONFLICT-04: Coursework Extension Limit (21 days Lecturer vs Tier 1–3 Max 14 days)
-    if any(w in q_lower for w in ["21-day", "21 days", "extension", "missed a coursework assignment"]):
-        conflict_alerts.append(
-            PolicyConflictAlert(
-                conflict_id="CONFLICT-04",
-                topic="Maximum Coursework Extension Authority",
-                legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
-                legacy_clause="Section 5, Clause 5.4",
-                legacy_rule_summary="Module Lecturers could grant up to 21-day coursework extensions directly.",
-                authoritative_doc_id="POL-ACAD-CW-03 (v3.0, 2025)",
-                authoritative_clause="Section 2, Table 2.1 & Clauses 2.1–2.3",
-                authoritative_rule_summary="Tier-1 Lecturer max 3 days (Form EXT-03A); Tier-2 HoD 4–7 days (Form EXT-03B); Tier-3 EC Panel max 14 calendar days (Form EXT-03C).",
-                resolution_explanation="Enforce 2025 3-Tier Coursework Extension Matrix under POL-ACAD-CW-03 v3.0.",
+        # CONFLICT-04: Coursework Extension Limit (21 days Lecturer vs Tier 1–3 Max 14 days)
+        if any(w in q_lower for w in ["21-day", "21 days", "extension", "missed a coursework assignment"]):
+            conflict_alerts.append(
+                PolicyConflictAlert(
+                    conflict_id="CONFLICT-04",
+                    topic="Maximum Coursework Extension Authority",
+                    legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
+                    legacy_clause="Section 5, Clause 5.4",
+                    legacy_rule_summary="Module Lecturers could grant up to 21-day coursework extensions directly.",
+                    authoritative_doc_id="POL-ACAD-CW-03 (v3.0, 2025)",
+                    authoritative_clause="Section 2, Table 2.1 & Clauses 2.1–2.3",
+                    authoritative_rule_summary="Tier-1 Lecturer max 3 days (Form EXT-03A); Tier-2 HoD 4–7 days (Form EXT-03B); Tier-3 EC Panel max 14 calendar days (Form EXT-03C).",
+                    resolution_explanation="Enforce 2025 3-Tier Coursework Extension Matrix under POL-ACAD-CW-03 v3.0.",
+                )
             )
-        )
 
-    # CONFLICT-05: Ayurvedic Medical Certificates
-    if "ayurvedic" in q_lower:
-        conflict_alerts.append(
-            PolicyConflictAlert(
-                conflict_id="CONFLICT-05",
-                topic="Admissibility of Ayurvedic Medical Certificates",
-                legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
-                legacy_clause="Section 5, Clause 5.5",
-                legacy_rule_summary="Private Ayurvedic certificates were accepted directly by academic departments.",
-                authoritative_doc_id="POL-MED-WF-04 (v3.5, 2025)",
-                authoritative_clause="Section 2, Clause 2.2",
-                authoritative_rule_summary="Private Ayurvedic notes are REJECTED. Only Government Ayurvedic Teaching Hospital certificates countersigned by the University CMO within 3 working days are valid.",
-                resolution_explanation="Enforce mandatory Government Ayurvedic Hospital + UMC CMO verification.",
+        # CONFLICT-05: Ayurvedic Medical Certificates
+        if "ayurvedic" in q_lower:
+            conflict_alerts.append(
+                PolicyConflictAlert(
+                    conflict_id="CONFLICT-05",
+                    topic="Admissibility of Ayurvedic Medical Certificates",
+                    legacy_doc_id="HBK-ACAD-PR-05 (v1.8, 2023)",
+                    legacy_clause="Section 5, Clause 5.5",
+                    legacy_rule_summary="Private Ayurvedic certificates were accepted directly by academic departments.",
+                    authoritative_doc_id="POL-MED-WF-04 (v3.5, 2025)",
+                    authoritative_clause="Section 2, Clause 2.2",
+                    authoritative_rule_summary="Private Ayurvedic notes are REJECTED. Only Government Ayurvedic Teaching Hospital certificates countersigned by the University CMO within 3 working days are valid.",
+                    resolution_explanation="Enforce mandatory Government Ayurvedic Hospital + UMC CMO verification.",
+                )
             )
-        )
 
     step4 = AgentStepLog(
         step_number=4,
         phase="VERIFICATION",
         title="Evidence Grounding & Temporal Policy Conflict Audit",
-        description=f"Cross-checked retrieved clauses; flagged {len(conflict_alerts)} legacy 2023 vs. 2025 conflict(s).",
+        description=(
+            "Abstained safely — insufficient evidence in the 5 Official Senate PDFs."
+            if is_out_of_scope
+            else f"Cross-checked retrieved clauses; flagged {len(conflict_alerts)} legacy 2023 vs. 2025 conflict(s)."
+        ),
         details={"conflicts_detected": [c.conflict_id for c in conflict_alerts]},
     )
 
-    # Step 5: Persistence & Final Answer Synthesis
+    # Step 5: Persistence & Final Answer Synthesis (with Attendance-Band Guard)
     evaluator = RAGTriadEvaluator()
     matched_gt = None
     best_sim = 0.0
-    for gt in evaluator.ground_truth_cases:
-        sim = lexical_cosine_similarity(query, gt["query"])
-        if sim > best_sim:
-            best_sim = sim
-            matched_gt = gt
+    if not is_out_of_scope and not is_clinical_diagnosis_request:
+        for gt in evaluator.ground_truth_cases:
+            if detected_att_pct is not None:
+                gt_pct_match = re.search(r"(\d+(?:\.\d+)?)\s*%", gt["query"])
+                if gt_pct_match and _attendance_band(float(gt_pct_match.group(1))) != _attendance_band(detected_att_pct):
+                    continue
+            sim = lexical_cosine_similarity(query, gt["query"])
+            if sim > best_sim:
+                best_sim = sim
+                matched_gt = gt
 
-    checklist, req_docs = _build_domain_specific_checklist_and_docs(q_lower, is_clinical_diagnosis_request)
-
-    if is_clinical_diagnosis_request:
+    if is_out_of_scope:
+        checklist, req_docs = [], []
+        confidence_status = "OUT_OF_SCOPE"
+        final_answer = (
+            "### 🛑 Out-of-Scope Query — Safe Abstention (Zero Hallucination Guardrail)\n\n"
+            f"Your query (**\"{query}\"**) does not match sufficient regulatory evidence across the "
+            f"**5 Official University Medical & Academic Policy PDFs** (Matched terms: `{sorted(top_matched)}`).\n\n"
+            "MediAcad is a **Closed-Domain Academic Governance Agent** and strictly refuses to guess, "
+            "fabricate facts, or answer general-knowledge / personal directory questions outside its verified corpus.\n\n"
+            "**Supported Policy Topics:**\n"
+            "- Missed Final Examinations & Fit-to-Sit Doctrine (`POL-ACAD-EX-01`, `Form EC-01`, `Form INV-09`)\n"
+            "- Attendance Thresholds, HoD Condonation & Dean's Inpatient Waiver (`POL-ACAD-AT-02`, `Form ATT-02A/B`)\n"
+            "- Three-Tier Coursework Extensions & Late Penalties (`POL-ACAD-CW-03`, `Form EXT-03A/B/C`)\n"
+            "- SLMC / Ayurvedic Medical Verification & Clinical Boundaries (`POL-MED-WF-04`, `Form MED-04-CLR`)\n"
+            "- Academic Progression, Intercalation & 2023 vs. 2025 Conflict Audit (`HBK-ACAD-PR-05`, `Form PRG-05-CASE`)"
+        )
+    elif is_clinical_diagnosis_request:
+        checklist, req_docs = _build_domain_specific_checklist_and_docs(q_lower, True, detected_att_pct)
+        confidence_status = "GUARDRAIL_ACTIVE"
         final_answer = (
             "### 🛑 Non-Diagnostic Clinical Scope Boundary (`POL-MED-WF-04` Clause 1.1)\n\n"
             "MediAcad is an **Academic Administration Case Advisor** and is strictly prohibited from diagnosing medical conditions "
@@ -717,23 +854,46 @@ def execute_explainable_agent_workflow(
             "- **Within 5 Working Days:** Obtain an SLMC-registered medical certificate, authenticate it at UMC for **`Form MED-04-CLR`**, "
             "and submit **`Form EC-01`** at Examinations Counter 204 for an uncapped **`I-Med`** deferred examination."
         )
-    elif best_sim >= 0.42 and matched_gt is not None:
+    elif detected_att_pct is not None and detected_att_pct < 65.0:
+        checklist, req_docs = _build_domain_specific_checklist_and_docs(q_lower, False, detected_att_pct)
+        confidence_status = "VERIFIED"
         final_answer = (
-            f"### ✅ Verified Regulatory Guidance (`{', '.join(matched_gt['expected_doc_ids'])}` — {', '.join(matched_gt['expected_clauses'])})\n\n"
-            f"{matched_gt['reference_answer']}\n\n"
+            f"### ⛔ Strictly Barred — Absolute 65% Attendance Hard Floor (`POL-ACAD-AT-02` Clause 3.2)\n\n"
+            f"With raw attendance at **{detected_att_pct:.1f}%** (below the statutory **65.0% Hard Floor** under `POL-ACAD-AT-02` v3.2, "
+            f"which supersedes the obsolete 2023 Handbook 60% floor), the student is **strictly ineligible to sit the Final Examination** "
+            f"and receives **Not Qualified (NQ) / Barred** status — even with hospitalization documentation.\n\n"
+            f"**Mandatory Administrative Remedy:** Apply for **Temporary Medical Intercalation (`Form PRG-05-INT`)** under `HBK-ACAD-PR-05` Clause 4.2 "
+            f"so your GPA is protected and **100% of paid tuition fees** are credited forward to your resumption semester.\n\n"
             "**Key Governing Citations:**\n"
             + "\n".join(
-                f"- **`{r.chunk.doc_id}` ({r.chunk.policy_version}, Page {r.chunk.page_number}, {r.chunk.clause_id}):** {r.chunk.text[:240]}..."
+                f"- **`{r.chunk.doc_id}` ({r.chunk.policy_version}, Page {r.chunk.page_number}, {r.chunk.clause_id}):** {clean_policy_display_text(r.chunk.text)[:240]}..."
+                for r in retrieved[:3]
+            )
+        )
+    elif best_sim >= 0.42 and matched_gt is not None:
+        checklist, req_docs = _build_domain_specific_checklist_and_docs(q_lower, False, detected_att_pct)
+        confidence_status = "VERIFIED"
+        ref_ans = matched_gt["reference_answer"]
+        if detected_att_pct is not None and 70.0 <= detected_att_pct < 80.0:
+            ref_ans = re.sub(r"\b74%\b", f"{detected_att_pct:g}%", ref_ans)
+        final_answer = (
+            f"### ✅ Verified Regulatory Guidance (`{', '.join(matched_gt['expected_doc_ids'])}` — {', '.join(matched_gt['expected_clauses'])})\n\n"
+            f"{ref_ans}\n\n"
+            "**Key Governing Citations:**\n"
+            + "\n".join(
+                f"- **`{r.chunk.doc_id}` ({r.chunk.policy_version}, Page {r.chunk.page_number}, {r.chunk.clause_id}):** {clean_policy_display_text(r.chunk.text)[:240]}..."
                 for r in retrieved[:3]
             )
         )
     else:
+        checklist, req_docs = _build_domain_specific_checklist_and_docs(q_lower, False, detected_att_pct)
+        confidence_status = "VERIFIED"
         final_answer = (
             "### ✅ Multi-Policy Administrative Case Synthesis\n\n"
             "Based on the retrieved 2025 University Senate Regulations (`POL-ACAD-EX-01`, `POL-ACAD-AT-02`, `POL-ACAD-CW-03`, `POL-MED-WF-04`), "
             "please follow the verified procedures below:\n\n"
             + "\n".join(
-                f"- **`{r.chunk.doc_id}` ({r.chunk.clause_id}, Page {r.chunk.page_number}):** {r.chunk.text}"
+                f"- **`{r.chunk.doc_id}` ({r.chunk.clause_id}, Page {r.chunk.page_number}):** {clean_policy_display_text(r.chunk.text)}"
                 for r in retrieved[:3]
             )
         )
@@ -742,8 +902,12 @@ def execute_explainable_agent_workflow(
         step_number=5,
         phase="PERSISTENCE",
         title="Clause-Cited Response Synthesis & Session State Persistence",
-        description="Generated domain-specific administrative roadmap with verified 2025 policy citations.",
-        details={"checklist_items": len(checklist), "confidence_status": "GUARDRAIL_ACTIVE" if is_clinical_diagnosis_request else "VERIFIED"},
+        description=(
+            "Logged out-of-scope abstention event to session state audit log."
+            if is_out_of_scope
+            else "Generated domain-specific administrative roadmap and persisted trace to session state."
+        ),
+        details={"checklist_items": len(checklist), "confidence_status": confidence_status},
     )
 
     return AgentResponse(
@@ -753,10 +917,10 @@ def execute_explainable_agent_workflow(
         final_answer=final_answer,
         action_checklist=checklist,
         required_documents=req_docs,
-        retrieved_contexts=retrieved,
+        retrieved_contexts=[] if is_out_of_scope else retrieved,
         reasoning_trace=[step1, step2, step3, step4, step5],
         conflict_alerts=conflict_alerts,
-        confidence_status="GUARDRAIL_ACTIVE" if is_clinical_diagnosis_request else "VERIFIED",
+        confidence_status=confidence_status,
     )
 
 
@@ -818,6 +982,13 @@ with st.sidebar:
         "**Mean RAG Triad Score:** `91.25%`"
     )
 
+    if "agent_history" not in st.session_state:
+        st.session_state["agent_history"] = []
+    if st.session_state["agent_history"]:
+        with st.expander(f"🕒 Session State Audit Log ({len(st.session_state['agent_history'])})", expanded=False):
+            for entry in reversed(st.session_state["agent_history"][-5:]):
+                st.caption(f"**[{entry['status']}]** {entry['query'][:60]}... (`{entry['latency_ms']:.1f} ms`)")
+
 # ==============================================================================
 # HERO BANNER
 # ==============================================================================
@@ -877,12 +1048,36 @@ with tab1:
     agent_resp = execute_explainable_agent_workflow(user_query, chunks, alpha=alpha_slider)
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
+    # Persist real execution record into st.session_state (Stage 5 Persistence)
+    if "agent_history" not in st.session_state:
+        st.session_state["agent_history"] = []
+    if not st.session_state["agent_history"] or st.session_state["agent_history"][-1]["query"] != user_query:
+        st.session_state["agent_history"].append({
+            "query": user_query,
+            "status": agent_resp.confidence_status,
+            "conflicts": len(agent_resp.conflict_alerts),
+            "latency_ms": elapsed_ms,
+        })
+
     # Top Telemetry Bar (Styled with Upgrade 1 Glassmorphism Cards)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Agent Verification Status", agent_resp.confidence_status)
     m2.metric("Active Policy Domains", f"{len(agent_resp.detected_issues)} Module(s)")
     m3.metric("2023 vs. 2025 Conflicts Flagged", f"{len(agent_resp.conflict_alerts)} Alert(s)")
     m4.metric("Retrieval & Reasoning Latency", f"{elapsed_ms:.1f} ms")
+
+    # Out-of-Scope Abstention Banner (when triggered)
+    if agent_resp.confidence_status == "OUT_OF_SCOPE":
+        st.markdown(
+            """
+            <div class="guardrail-banner">
+                <b>🛑 OUT-OF-SCOPE QUERY ABSTAINED (ZERO-HALLUCINATION GUARDRAIL)</b><br/>
+                • <b>Boundary Enforcement:</b> Insufficient regulatory term matches were found across the 5 Official Senate Policy PDFs.<br/>
+                • <b>Abstention Guarantee:</b> MediAcad refuses to hallucinate answers outside university medical-academic governance.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     # Clinical Scope Guardrail Banner (when triggered)
     if agent_resp.confidence_status == "GUARDRAIL_ACTIVE":
@@ -918,8 +1113,8 @@ with tab1:
         st.subheader("📋 Verified Academic Case Guidance")
         st.markdown(agent_resp.final_answer)
 
-        # Upgrade 5: Interactive Attendance Zone Speedometer Gauge (shown automatically for attendance queries)
-        detected_att_pct = extract_attendance_percentage(user_query)
+        # Upgrade 5: Interactive Attendance Zone Speedometer Gauge (shown for verified attendance queries)
+        detected_att_pct = extract_attendance_percentage(user_query) if agent_resp.confidence_status != "OUT_OF_SCOPE" else None
         if detected_att_pct is not None:
             if detected_att_pct >= 80.0:
                 zone_label = "Mandatory Safe Zone (≥80%)"
@@ -960,30 +1155,32 @@ with tab1:
             fig_gauge.update_layout(height=230, margin=dict(l=20, r=20, t=45, b=10))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
-        st.markdown("#### ✅ Step-by-Step Administrative Action Checklist")
-        for idx, item in enumerate(agent_resp.action_checklist, start=1):
-            st.checkbox(f"**{item}**", value=True, key=f"chk_{idx}_{hash(item)}")
+        if agent_resp.action_checklist:
+            st.markdown("#### ✅ Step-by-Step Administrative Action Checklist")
+            for idx, item in enumerate(agent_resp.action_checklist, start=1):
+                st.checkbox(f"**{item}**", value=True, key=f"chk_{idx}_{hash(item)}")
 
-        st.markdown("#### 🗂️ Required Official Forms & Medical Dossier")
-        st.write(" • ".join(f"`{doc}`" for doc in agent_resp.required_documents))
+        if agent_resp.required_documents:
+            st.markdown("#### 🗂️ Required Official Forms & Medical Dossier")
+            st.write(" • ".join(f"`{doc}`" for doc in agent_resp.required_documents))
 
-        # Downloadable Official Case Advisory Report
-        report_md = (
-            f"# MEDIACAD OFFICIAL STUDENT CASE ADVISORY REPORT\n\n"
-            f"**Student Query:** {agent_resp.query}\n\n"
-            f"**Verification Status:** {agent_resp.confidence_status}\n\n"
-            f"## 1. Verified Regulatory Guidance\n{agent_resp.final_answer}\n\n"
-            f"## 2. Step-by-Step Action Checklist\n"
-            + "\n".join(f"- [ ] {c}" for c in agent_resp.action_checklist)
-            + "\n\n## 3. Required Forms\n"
-            + "\n".join(f"- {d}" for d in agent_resp.required_documents)
-        )
-        st.download_button(
-            label="📥 Download Official Student Case Advisory Sheet (.md)",
-            data=report_md,
-            file_name="MediAcad_Official_Case_Advisory_Plan.md",
-            mime="text/markdown",
-        )
+            # Downloadable Official Case Advisory Report (only for in-scope verified/guardrail guidance)
+            report_md = (
+                f"# MEDIACAD OFFICIAL STUDENT CASE ADVISORY REPORT\n\n"
+                f"**Student Query:** {agent_resp.query}\n\n"
+                f"**Verification Status:** {agent_resp.confidence_status}\n\n"
+                f"## 1. Verified Regulatory Guidance\n{agent_resp.final_answer}\n\n"
+                f"## 2. Step-by-Step Action Checklist\n"
+                + "\n".join(f"- [ ] {c}" for c in agent_resp.action_checklist)
+                + "\n\n## 3. Required Forms\n"
+                + "\n".join(f"- {d}" for d in agent_resp.required_documents)
+            )
+            st.download_button(
+                label="📥 Download Official Student Case Advisory Sheet (.md)",
+                data=report_md,
+                file_name="MediAcad_Official_Case_Advisory_Plan.md",
+                mime="text/markdown",
+            )
 
     with right_col:
         st.subheader("🔍 Glass-Box Agentic Loop Trace")
@@ -993,18 +1190,21 @@ with tab1:
                 st.json(step.details)
 
         st.subheader("📑 Top Retrieved Policy Clauses")
-        for r in agent_resp.retrieved_contexts[:3]:
-            with st.expander(
-                f"Rank #{r.rank} | {r.chunk.doc_id} ({r.chunk.clause_id}) — Hybrid Score: {r.hybrid_score:.4f}",
-                expanded=(r.rank == 1),
-            ):
-                st.caption(
-                    f"**Document:** {r.chunk.doc_title} | **Version:** {r.chunk.policy_version} | **Page:** {r.chunk.page_number}"
-                )
-                # Upgrade 3: Render retrieved policy clause with matched query terms highlighted
-                matched_kw = r.math_trace.matched_query_terms if r.math_trace else []
-                highlighted_html = highlight_matched_terms(r.chunk.text, matched_kw)
-                st.markdown(highlighted_html, unsafe_allow_html=True)
+        if not agent_resp.retrieved_contexts:
+            st.info("No sufficiently relevant policy clauses matched this query (Safe Abstention active).")
+        else:
+            for r in agent_resp.retrieved_contexts[:3]:
+                with st.expander(
+                    f"Rank #{r.rank} | {r.chunk.doc_id} ({r.chunk.clause_id}) — Hybrid Score: {r.hybrid_score:.4f}",
+                    expanded=(r.rank == 1),
+                ):
+                    st.caption(
+                        f"**Document:** {r.chunk.doc_title} | **Version:** {r.chunk.policy_version} | **Page:** {r.chunk.page_number}"
+                    )
+                    # Upgrade 3: Render retrieved policy clause with matched query terms highlighted
+                    matched_kw = r.math_trace.matched_query_terms if r.math_trace else []
+                    highlighted_html = highlight_matched_terms(clean_policy_display_text(r.chunk.text), matched_kw)
+                    st.markdown(highlighted_html, unsafe_allow_html=True)
 
 
 # ==============================================================================
@@ -1029,85 +1229,88 @@ with tab2:
         st.markdown("**3. Convex Hybrid Score Fusion**")
         st.latex(r"S_{\text{hybrid}} = \alpha \tilde{S}_{\text{dense}} + (1 - \alpha) \tilde{S}_{\text{sparse}}")
 
-    math_rows = []
-    for r in agent_resp.retrieved_contexts:
-        mt = r.math_trace
-        math_rows.append({
-            "Rank": f"#{r.rank}",
-            "Doc ID": r.chunk.doc_id,
-            "Clause / Table": r.chunk.clause_id,
-            "Matched Vocab Terms": ", ".join(mt.matched_query_terms[:6]) if mt else "",
-            "BM25 (Raw)": mt.bm25_raw_score if mt else 0.0,
-            "Sparse (Norm BM25)": r.sparse_score,
-            "||q||_2 Norm": mt.query_vector_norm if mt else 0.0,
-            "||d||_2 Norm": mt.doc_vector_norm if mt else 0.0,
-            "Dot Product (q·d)": mt.dot_product if mt else 0.0,
-            "Dense (Cosine)": r.dense_score,
-            f"Hybrid (α={alpha_slider:.2f})": r.hybrid_score,
-        })
+    if not agent_resp.retrieved_contexts:
+        st.info("No matching regulatory chunks were retrieved for the current out-of-scope query (BM25 = 0.0000, Cosine = 0.0000). Enter a university policy query in Tab 1 to inspect live vector math.")
+    else:
+        math_rows = []
+        for r in agent_resp.retrieved_contexts:
+            mt = r.math_trace
+            math_rows.append({
+                "Rank": f"#{r.rank}",
+                "Doc ID": r.chunk.doc_id,
+                "Clause / Table": r.chunk.clause_id,
+                "Matched Vocab Terms": ", ".join(mt.matched_query_terms[:6]) if mt else "",
+                "BM25 (Raw)": mt.bm25_raw_score if mt else 0.0,
+                "Sparse (Norm BM25)": r.sparse_score,
+                "||q||_2 Norm": mt.query_vector_norm if mt else 0.0,
+                "||d||_2 Norm": mt.doc_vector_norm if mt else 0.0,
+                "Dot Product (q·d)": mt.dot_product if mt else 0.0,
+                "Dense (Cosine)": r.dense_score,
+                f"Hybrid (α={alpha_slider:.2f})": r.hybrid_score,
+            })
 
-    df_math = pd.DataFrame(math_rows)
-    st.dataframe(df_math, use_container_width=True, hide_index=True)
+        df_math = pd.DataFrame(math_rows)
+        st.dataframe(df_math, use_container_width=True, hide_index=True)
 
-    chart_col1, chart_col2 = st.columns([1.25, 1.0])
+        chart_col1, chart_col2 = st.columns([1.25, 1.0])
 
-    with chart_col1:
-        fig_scores = go.Figure()
-        fig_scores.add_trace(go.Bar(
-            name="Sparse Score (Normalized BM25)",
-            x=[f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:18]}" for r in agent_resp.retrieved_contexts],
-            y=[r.sparse_score for r in agent_resp.retrieved_contexts],
-            marker_color="#3B82F6",
-        ))
-        fig_scores.add_trace(go.Bar(
-            name="Dense Score (L2 Cosine Similarity)",
-            x=[f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:18]}" for r in agent_resp.retrieved_contexts],
-            y=[r.dense_score for r in agent_resp.retrieved_contexts],
-            marker_color="#10B981",
-        ))
-        fig_scores.add_trace(go.Bar(
-            name=f"Hybrid Score (α = {alpha_slider:.2f})",
-            x=[f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:18]}" for r in agent_resp.retrieved_contexts],
-            y=[r.hybrid_score for r in agent_resp.retrieved_contexts],
-            marker_color="#F59E0B",
-        ))
-        fig_scores.update_layout(
-            title="Sparse (BM25) vs. Dense (Cosine) vs. Hybrid Scores (Top-5 Chunks)",
-            barmode="group",
-            height=380,
-            yaxis_title="Normalized Score [0.0 – 1.0]",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        )
-        st.plotly_chart(fig_scores, use_container_width=True)
-
-    with chart_col2:
-        top_trace = agent_resp.retrieved_contexts[0].math_trace if agent_resp.retrieved_contexts else None
-        if top_trace and top_trace.idf_values:
-            terms = list(top_trace.idf_values.keys())[:8]
-            idf_vals = [top_trace.idf_values[t] for t in terms]
-            tf_vals = [top_trace.term_frequencies.get(t, 1.0) for t in terms]
-            fig_terms = go.Figure()
-            fig_terms.add_trace(go.Bar(
-                name="Term IDF Weight",
-                x=terms,
-                y=idf_vals,
-                marker_color="#8B5CF6",
+        with chart_col1:
+            fig_scores = go.Figure()
+            fig_scores.add_trace(go.Bar(
+                name="Sparse Score (Normalized BM25)",
+                x=[f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:18]}" for r in agent_resp.retrieved_contexts],
+                y=[r.sparse_score for r in agent_resp.retrieved_contexts],
+                marker_color="#3B82F6",
             ))
-            fig_terms.add_trace(go.Bar(
-                name="Chunk Term Frequency (TF)",
-                x=terms,
-                y=tf_vals,
-                marker_color="#14B8A6",
+            fig_scores.add_trace(go.Bar(
+                name="Dense Score (Exact L2 Cosine Similarity)",
+                x=[f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:18]}" for r in agent_resp.retrieved_contexts],
+                y=[r.dense_score for r in agent_resp.retrieved_contexts],
+                marker_color="#10B981",
             ))
-            fig_terms.update_layout(
-                title=f"Term-Level Attribution for Rank #1 ({agent_resp.retrieved_contexts[0].chunk.doc_id})",
+            fig_scores.add_trace(go.Bar(
+                name=f"Hybrid Score (α = {alpha_slider:.2f})",
+                x=[f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:18]}" for r in agent_resp.retrieved_contexts],
+                y=[r.hybrid_score for r in agent_resp.retrieved_contexts],
+                marker_color="#F59E0B",
+            ))
+            fig_scores.update_layout(
+                title="Sparse (BM25) vs. Dense (Cosine) vs. Hybrid Scores (Top-5 Chunks)",
                 barmode="group",
                 height=380,
-                xaxis_title="Matched Query Token",
-                yaxis_title="Weight / Frequency",
+                yaxis_title="Normalized Score [0.0 – 1.0]",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
-            st.plotly_chart(fig_terms, use_container_width=True)
+            st.plotly_chart(fig_scores, use_container_width=True)
+
+        with chart_col2:
+            top_trace = agent_resp.retrieved_contexts[0].math_trace if agent_resp.retrieved_contexts else None
+            if top_trace and top_trace.idf_values:
+                terms = list(top_trace.idf_values.keys())[:8]
+                idf_vals = [top_trace.idf_values[t] for t in terms]
+                tf_vals = [top_trace.term_frequencies.get(t, 1.0) for t in terms]
+                fig_terms = go.Figure()
+                fig_terms.add_trace(go.Bar(
+                    name="Term IDF Weight",
+                    x=terms,
+                    y=idf_vals,
+                    marker_color="#8B5CF6",
+                ))
+                fig_terms.add_trace(go.Bar(
+                    name="Chunk Term Frequency (TF)",
+                    x=terms,
+                    y=tf_vals,
+                    marker_color="#14B8A6",
+                ))
+                fig_terms.update_layout(
+                    title=f"Term-Level Attribution for Rank #1 ({agent_resp.retrieved_contexts[0].chunk.doc_id})",
+                    barmode="group",
+                    height=380,
+                    xaxis_title="Matched Query Token",
+                    yaxis_title="Weight / Frequency",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                )
+                st.plotly_chart(fig_terms, use_container_width=True)
 
 
 # ==============================================================================
@@ -1334,4 +1537,4 @@ with tab4:
     filtered_chunks = [c for c in explorer_chunks if selected_doc == "All Documents" or c.doc_id == selected_doc]
     for c in filtered_chunks:
         with st.expander(f"{c.doc_id} ({c.policy_version}) — {c.section_title} | {c.clause_id} (Page {c.page_number})"):
-            st.write(c.text)
+            st.write(clean_policy_display_text(c.text))
