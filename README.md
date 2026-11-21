@@ -39,7 +39,7 @@ The **MediAcad 4-Tab Explainable Agentic RAG Dashboard** is deployed live and pu
 | Dashboard Tab | Core Glass-Box Capabilities Exposed |
 | :--- | :--- |
 | **🧠 Tab 1: Explainable Case Advisor** | 5-Stage Agentic Loop (`Observation ➔ Reasoning ➔ Action ➔ Verification ➔ Persistence`), automated **2023 vs. 2025 Conflict Alerts**, interactive **Attendance Zone Speedometer Gauge**, keyword-highlighted policy clauses, and downloadable `.md` Student Case Plan. |
-| **📐 Tab 2: Mathematical IR Inspector** | Real-time hyperparameter tuning ($\alpha \in [0, 1]$), live LaTeX derivations, per-chunk **BM25**, **IDF**, **Euclidean Norms ($\|\mathbf{q}\|_2, \|\mathbf{d}\|_2$)**, **Dot Product ($\mathbf{q}\cdot\mathbf{d}$)**, **Cosine Similarity**, and **Term-Level Attribution** charts. |
+| **📐 Tab 2: Mathematical IR Inspector** | Real-time hyperparameter tuning ($\alpha \in [0, 1]$), live LaTeX derivations, per-chunk **BM25**, **IDF**, **Euclidean Norms ($\lVert \mathbf{q} \rVert_2, \lVert \mathbf{d} \rVert_2$)**, **Dot Product ($\mathbf{q}\cdot\mathbf{d}$)**, **Cosine Similarity**, and **Term-Level Attribution** charts. |
 | **📊 Tab 3: RAG Triad Benchmark (32 Cases)** | Quantitative evaluation across **32 Ground-Truth Cases**, **3-Mode Ablation Study** (*Sparse BM25* vs. *Dense Cosine* vs. *MediAcad Hybrid*), **Multi-Axis Radar Geometry**, and full 32-case audit table. |
 | **📚 Tab 4: Policy Corpus & Conflict Matrix** | Complete inventory of the **5 Official University Senate PDFs (17 Structured Tables)**, **1-Click Official PDF Downloads**, **2023 vs. 2025 Conflict Matrix**, and Interactive Policy Clause Explorer. |
 
@@ -212,16 +212,25 @@ classDiagram
 Unlike black-box wrappers, MediAcad explicitly computes, logs, and exposes the underlying linear algebra and probabilistic retrieval mechanics (`src/retrieval/math_mechanics.py` & `src/retrieval/sparse_engine.py`) for every query-chunk pair $(Q, D)$.
 
 ### 4.1 Vocabulary Construction & Sparse Lexical Scoring (TF-IDF & Okapi BM25)
-Given a corpus $\mathcal{C} = \{D_1, D_2, \dots, D_N\}$ of $N$ structure-aware policy chunks and vocabulary $\mathcal{V} = \{t_1, t_2, \dots, t_M\}$:
+Given a corpus $\mathcal{C} = \lbrace D_1, D_2, \dots, D_N \rbrace$ of $N$ structure-aware policy chunks and vocabulary $\mathcal{V} = \lbrace t_1, t_2, \dots, t_M \rbrace$:
 
 1. **Sublinear Term Frequency ($\text{TF}$):**
-   $$\text{TF}(t, D) = \begin{cases} 1 + \ln f(t, D) & \text{if } f(t, D) > 0 \\ 0 & \text{otherwise} \end{cases}$$
+
+   ```math
+   \text{TF}(t, D) = \begin{cases} 1 + \ln f(t, D) & \text{if } f(t, D) > 0 \\ 0 & \text{otherwise} \end{cases}
+   ```
 
 2. **Smoothed Robertson-Spärck Jones Inverse Document Frequency ($\text{IDF}$):**
-   $$\text{IDF}(t) = \ln\left(1 + \frac{N - \text{df}(t) + 0.5}{\text{df}(t) + 0.5}\right)$$
 
-3. **Okapi BM25 Relevance Score ($k_1 = 1.5, \, b = 0.75$):**
-   $$S_{\text{BM25}}(Q, D) = \sum_{t \in Q \cap D} \text{IDF}(t) \cdot \frac{f(t, D) \cdot (k_1 + 1)}{f(t, D) + k_1 \cdot \left(1 - b + b \cdot \frac{|D|}{\text{avgdl}}\right)}$$
+   ```math
+   \text{IDF}(t) = \ln\left(1 + \frac{N - \text{df}(t) + 0.5}{\text{df}(t) + 0.5}\right)
+   ```
+
+3. **Okapi BM25 Relevance Score ($k_1 = 1.5, \quad b = 0.75$):**
+
+   ```math
+   S_{\text{BM25}}(Q, D) = \sum_{t \in Q \cap D} \text{IDF}(t) \cdot \frac{f(t, D) \cdot (k_1 + 1)}{f(t, D) + k_1 \cdot \left(1 - b + b \cdot \frac{|D|}{\text{avgdl}}\right)}
+   ```
 
 ---
 
@@ -229,22 +238,35 @@ Given a corpus $\mathcal{C} = \{D_1, D_2, \dots, D_N\}$ of $N$ structure-aware p
 Given query vector $\mathbf{q} \in \mathbb{R}^{D}$ and document chunk vector $\mathbf{d} \in \mathbb{R}^{D}$:
 
 1. **Euclidean Vector Magnitude ($L_2$ Norm):**
-   $$\|\mathbf{q}\|_2 = \sqrt{\sum_{i=1}^{D} q_i^2}, \qquad \|\mathbf{d}\|_2 = \sqrt{\sum_{i=1}^{D} d_i^2}$$
+
+   ```math
+   \lVert \mathbf{q} \rVert_2 = \sqrt{\sum_{i=1}^{D} q_i^2}, \qquad \lVert \mathbf{d} \rVert_2 = \sqrt{\sum_{i=1}^{D} d_i^2}
+   ```
 
 2. **Algebraic Inner (Dot) Product:**
-   $$\mathbf{q} \cdot \mathbf{d} = \sum_{i=1}^{D} q_i \, d_i$$
+
+   ```math
+   \mathbf{q} \cdot \mathbf{d} = \sum_{i=1}^{D} q_i d_i
+   ```
 
 3. **$L_2$ Unit Vector Normalization & Cosine Similarity:**
-   $$\hat{\mathbf{q}} = \frac{\mathbf{q}}{\|\mathbf{q}\|_2}, \qquad \hat{\mathbf{d}} = \frac{\mathbf{d}}{\|\mathbf{d}\|_2}, \qquad S_{\text{cosine}}(\mathbf{q}, \mathbf{d}) = \cos(\theta) = \frac{\mathbf{q} \cdot \mathbf{d}}{\|\mathbf{q}\|_2 \, \|\mathbf{d}\|_2} = \hat{\mathbf{q}} \cdot \hat{\mathbf{d}} \in [-1, 1]$$
+
+   ```math
+   \hat{\mathbf{q}} = \frac{\mathbf{q}}{\lVert \mathbf{q} \rVert_2}, \qquad \hat{\mathbf{d}} = \frac{\mathbf{d}}{\lVert \mathbf{d} \rVert_2}, \qquad S_{\text{cosine}}(\mathbf{q}, \mathbf{d}) = \cos(\theta) = \frac{\mathbf{q} \cdot \mathbf{d}}{\lVert \mathbf{q} \rVert_2 \lVert \mathbf{d} \rVert_2} = \hat{\mathbf{q}} \cdot \hat{\mathbf{d}} \in [-1, 1]
+   ```
 
 ---
 
 ### 4.3 Min-Max Score Normalization & Convex Hybrid Fusion
 Because $S_{\text{BM25}} \in [0, \infty)$ is unbounded whereas $S_{\text{cosine}} \in [0, 1]$ is bounded, raw BM25 scores across candidate set $\mathcal{K}$ are normalized via Min-Max scaling prior to convex combination:
 
-$$\tilde{S}_{\text{sparse}}(Q, D) = \frac{S_{\text{BM25}}(Q, D) - \min_{D' \in \mathcal{K}} S_{\text{BM25}}(Q, D')}{\max_{D' \in \mathcal{K}} S_{\text{BM25}}(Q, D') - \min_{D' \in \mathcal{K}} S_{\text{BM25}}(Q, D') + \epsilon}$$
+```math
+\tilde{S}_{\text{sparse}}(Q, D) = \frac{S_{\text{BM25}}(Q, D) - \min_{D' \in \mathcal{K}} S_{\text{BM25}}(Q, D')}{\max_{D' \in \mathcal{K}} S_{\text{BM25}}(Q, D') - \min_{D' \in \mathcal{K}} S_{\text{BM25}}(Q, D') + \epsilon}
+```
 
-$$S_{\text{hybrid}}(Q, D) = \alpha \cdot \tilde{S}_{\text{dense}}(Q, D) + (1 - \alpha) \cdot \tilde{S}_{\text{sparse}}(Q, D), \qquad \alpha \in [0, 1]$$
+```math
+S_{\text{hybrid}}(Q, D) = \alpha \cdot \tilde{S}_{\text{dense}}(Q, D) + (1 - \alpha) \cdot \tilde{S}_{\text{sparse}}(Q, D), \qquad \alpha \in [0, 1]
+```
 
 ---
 
@@ -276,11 +298,17 @@ The repository includes **5 multi-page official university regulatory PDFs** (`d
 
 The system is programmatically evaluated (`src/evaluation/metrics.py` & `src/evaluation/run_benchmark.py`) across **`data/evaluation/ground_truth.json` (32 curated test cases)** using the three **RAG Triad** metrics:
 
-$$\text{Context Relevance } (M_{\text{CR}}) = 0.45 \cdot \text{Recall}_{\text{doc}} + 0.35 \cdot \text{Recall}_{\text{clause}} + 0.20 \cdot \text{Cosine}_{\text{scaled}}(Q, C)$$
+```math
+\text{Context Relevance } (M_{\text{CR}}) = 0.45 \cdot \text{Recall}_{\text{doc}} + 0.35 \cdot \text{Recall}_{\text{clause}} + 0.20 \cdot \text{Cosine}_{\text{scaled}}(Q, C)
+```
 
-$$\text{Groundedness / Faithfulness } (M_{\text{GF}}) = 0.60 \cdot \text{Precision}_{\text{identifiers}}(\text{Forms, \%, Days}) + 0.40 \cdot \text{Support}_{\text{tokens}}(A, C)$$
+```math
+\text{Groundedness / Faithfulness } (M_{\text{GF}}) = 0.60 \cdot \text{Precision}_{\text{identifiers}}(\text{Forms, \%, Days}) + 0.40 \cdot \text{Support}_{\text{tokens}}(A, C)
+```
 
-$$\text{Answer Relevance } (M_{\text{AR}}) = 0.55 \cdot \text{Coverage}_{\text{keywords}} + 0.30 \cdot \text{Cosine}(A, A_{\text{ref}}) + 0.15 \cdot \text{Cosine}(A, Q)$$
+```math
+\text{Answer Relevance } (M_{\text{AR}}) = 0.55 \cdot \text{Coverage}_{\text{keywords}} + 0.30 \cdot \text{Cosine}(A, A_{\text{ref}}) + 0.15 \cdot \text{Cosine}(A, Q)
+```
 
 ### 🔬 6.1 Retrieval Ablation Study (32 Ground-Truth Cases)
 
