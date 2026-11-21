@@ -14,7 +14,7 @@ Implements the full 6-Step Agentic Loop:
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from src.interfaces.contracts import (
     BaseRetriever,
@@ -105,7 +105,8 @@ class MediAcadAgent(BaseAgent):
         llm_client: Optional[Any] = None,
         session_logger: Optional[PersistentSessionLogger] = None,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-2.5-flash",
+        model_name: Optional[str] = None,
+        load_env: bool = False,
     ):
         """
         Constructor Dependency Injection:
@@ -113,13 +114,23 @@ class MediAcadAgent(BaseAgent):
         - llm_client: Optional injected LLM client
         - session_logger: Persistence manager for JSON session traces
         - api_key: Gemini API Key (or loaded from environment GEMINI_API_KEY)
-        - model_name: Gemini model name for grounded synthesis
+        - model_name: Gemini model name for grounded synthesis (default: gemini-3.5-flash-lite)
+        - load_env: If True, loads .env via python-dotenv before reading GEMINI_API_KEY
         """
+        if load_env:
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(override=True)
+            except Exception:
+                pass
+
         self.retriever = retriever if retriever is not None else MockRetriever()
         self.llm_client = llm_client
         self.session_logger = session_logger or PersistentSessionLogger()
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model_name = model_name
+        raw_key = api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")
+        raw_key = raw_key.strip() if isinstance(raw_key, str) else ""
+        self.api_key = raw_key if (raw_key and raw_key != "your_gemini_api_key_here") else None
+        self.model_name = model_name or os.getenv("LLM_MODEL_NAME", "gemini-3.5-flash-lite")
 
         # Internal agent components
         self.planner = QueryPlanner()
@@ -403,7 +414,16 @@ class MediAcadAgent(BaseAgent):
 
         try:
             from google import genai
-            client = self.llm_client or genai.Client(api_key=self.api_key)
+            from google.genai import types
+
+            if self.llm_client is not None:
+                client = self.llm_client
+            else:
+                http_opts = types.HttpOptions(
+                    timeout=12000,
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                )
+                client = genai.Client(api_key=self.api_key, http_options=http_opts)
 
             context_snippets = "\n\n".join([
                 f"[{r.chunk.doc_id} {r.chunk.clause_id} (Page {r.chunk.page_number})]: {r.chunk.text}"

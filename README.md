@@ -5,7 +5,7 @@
 
 <!-- LIVE ANIMATED TYPING SVG BANNER -->
 <a href="https://mediacad-agentic-rag.streamlit.app/">
-  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=900&color=0D6E6E&center=true&vCenter=true&width=900&lines=Explainable+Agentic+RAG+Architecture+(Observation+%E2%9E%94+Reasoning+%E2%9E%94+Action+%E2%9E%94+Verification+%E2%9E%94+Persistence);Hybrid+Information+Retrieval%3A+Sparse+Okapi+BM25+%2B+Dense+L2-Normalized+Embeddings;Transparent+Mathematical+Trace%3A+TF-IDF+%E2%80%A2+Vector+Magnitude+%E2%80%A2+Dot+Product+%E2%80%A2+Cosine+Similarity;Automated+2023+Legacy+Handbook+vs.+2025+Senate+Policy+Conflict+Detection;91.25%25+Overall+RAG+Triad+Score+%26+100%25+Groundedness+Across+32+Ground-Truth+Cases" alt="Animated Data Science Spec" />
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=900&color=0D6E6E&center=true&vCenter=true&width=900&lines=Explainable+Agentic+RAG+Architecture+(Observation+%E2%9E%94+Reasoning+%E2%9E%94+Action+%E2%9E%94+Verification+%E2%9E%94+Persistence);Hybrid+Information+Retrieval%3A+Sparse+Okapi+BM25+%2B+Dense+L2-Normalized+Embeddings;Transparent+Mathematical+Trace%3A+TF-IDF+%E2%80%A2+Vector+Magnitude+%E2%80%A2+Dot+Product+%E2%80%A2+Cosine+Similarity;Automated+2023+Legacy+Handbook+vs.+2025+Senate+Policy+Conflict+Detection;87.57%25+Overall+RAG+Triad+Score+%26+96.72%25+Groundedness+Across+32+Ground-Truth+Cases" alt="Animated Data Science Spec" />
 </a>
 
 <br/>
@@ -15,7 +15,7 @@
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-0F2942?style=for-the-badge&logo=python&logoColor=white)
 ![Paradigm](https://img.shields.io/badge/Paradigm-Agentic%20RAG%20%2B%20OOP-0D6E6E?style=for-the-badge)
 ![Retrieval](https://img.shields.io/badge/IR%20Engine-BM25%20%2B%20Cosine%20Fusion-1E3A8A?style=for-the-badge)
-![Evaluation](https://img.shields.io/badge/RAG%20Triad-91.25%25%20(32%20Cases)-047857?style=for-the-badge)
+![Evaluation](https://img.shields.io/badge/RAG%20Triad-87.57%25%20(32%20Cases)-047857?style=for-the-badge)
 ![Module](https://img.shields.io/badge/NSBM-DS205.3%20Data%20Science%20with%20Python-8B1E3F?style=for-the-badge)
 
 [**🌐 Live Web App**](https://mediacad-agentic-rag.streamlit.app/) •
@@ -24,7 +24,7 @@
 [**3. OOP Class Design**](#-3-object-oriented-software-architecture-uml) •
 [**4. Mathematical Foundations**](#-4-mathematical-foundations-of-information-retrieval) •
 [**5. Policy Corpus & Conflicts**](#-5-unstructured-policy-corpus--conflict-matrix) •
-[**6. Empirical Evaluation (91.25%)**](#-6-rag-triad-evaluation-framework--empirical-benchmark)
+[**6. Empirical Evaluation (87.57%)**](#-6-rag-triad-evaluation-framework--empirical-benchmark)
 
 </div>
 
@@ -107,7 +107,7 @@ flowchart TD
     end
 
     subgraph EVAL ["4. RAG Triad Benchmark & Explainable Dashboard (src/evaluation/ & app/)"]
-        OUT(["Explainable Output + MathExplanationTrace + Conflict Alerts + 91.25% RAG Triad"]):::input
+        OUT(["Explainable Output + MathExplanationTrace + Conflict Alerts + 87.57% RAG Triad"]):::input
         PERSIST --> OUT
     end
 ```
@@ -196,7 +196,7 @@ classDiagram
         +run(user_query: str, session_id: str)* AgentResponse
     }
 
-    BaseChunker <|-- PolicyPDFChunker : implements
+    BaseChunker <|-- ClauseAwareChunker : implements
     BaseRetriever <|-- TFIDFAndBM25Engine : Sparse Strategy
     BaseRetriever <|-- HybridExplainableRetriever : Composite Strategy
     BaseAgent <|-- MediAcadAgent : implements
@@ -254,7 +254,7 @@ The repository includes **5 multi-page official university regulatory PDFs** (`d
 
 | Document ID | Official Policy Title | Edition & Status | Key Tables & Regulatory Mechanisms |
 | :--- | :--- | :--- | :--- |
-| **`POL-ACAD-EX-01`** | Examination & Medical Consideration Regulations | `v4.0 (2025 Senate Active)` | **4 Tables:** Fit-to-Sit doctrine (2.1), `Form INV-01` mid-exam collapse (2.2), 48h portal alert (3.1), **5-working-day** `Form EC-01` deadline (3.2), uncapped `I-Med` First-Sit. |
+| **`POL-ACAD-EX-01`** | Examination & Medical Consideration Regulations | `v4.0 (2025 Senate Active)` | **4 Tables:** Fit-to-Sit doctrine (2.1), `Form INV-09` mid-exam collapse (2.2), 48h portal alert (3.1), **5-working-day** `Form EC-01` deadline (3.2), uncapped `I-Med` First-Sit. |
 | **`POL-ACAD-AT-02`** | Attendance & Medical Absence Policy | `v3.2 (2025 Senate Active)` | **4 Tables:** **80%** baseline, **70%–79.9%** HoD condonation (`Form ATT-02A`), **65%–69.9%** Dean's inpatient waiver (`Form ATT-02B`), **<65%** `NQ` hard floor. |
 | **`POL-ACAD-CW-03`** | Coursework & Assessment Support Regulations | `v3.0 (2025 Senate Active)` | **3 Tables:** Tier-1 (**1–3d** `Form EXT-03A`), Tier-2 (**4–7d** `Form EXT-03B`), Tier-3 (**8–14d** `Form EXT-03C`), retrospective 3-day post-discharge rule, **5%/working day** late penalty (Table 4.1). |
 | **`POL-MED-WF-04`** | Medical Documentation & Student Welfare Guidelines | `v3.5 (2025 Senate Active)` | **3 Tables:** Non-diagnostic guardrail (1.1), SLMC credential matrix, mandatory UMC CMO Clearance Slip (`Form MED-04-CLR`), Govt. Ayurvedic 3-day CMO rule (2.2). |
@@ -286,20 +286,20 @@ $$\text{Answer Relevance } (M_{\text{AR}}) = 0.55 \cdot \text{Coverage}_{\text{k
 
 | Retrieval Strategy | Context Relevance | Groundedness (Faithfulness) | Answer Relevance | Overall RAG Triad Score |
 | :--- | :---: | :---: | :---: | :---: |
-| **Sparse Only (`BM25`, $\alpha = 0.0$)** | `78.12%` | `84.20%` | `79.45%` | `80.59%` |
-| **Dense Only (`L2 Cosine`, $\alpha = 1.0$)** | `82.40%` | `86.15%` | `83.90%` | `84.15%` |
-| **MediAcad Hybrid Fusion ($\alpha = 0.5$)** | **`90.51%`** | **`100.00%`** | **`83.23%`** | **`91.25%`** |
+| **Sparse Only (`BM25`, $\alpha = 0.0$)** | `76.04%` | `98.69%` | `70.34%` | `81.69%` |
+| **Dense Only (`L2 Cosine`, $\alpha = 1.0$)** | `75.92%` | `98.54%` | `68.67%` | `81.04%` |
+| **MediAcad Hybrid Fusion ($\alpha = 0.5$)** | **`87.19%`** | **`96.72%`** | **`78.80%`** | **`87.57%`** |
 
 ### 📂 6.2 Performance Breakdown by Query Category
 
 | Evaluation Category | Cases ($N=32$) | Context Relevance | Groundedness | Answer Relevance | Overall Triad Score |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **1. Single-Policy Clause Lookup** | 8 | `89.38%` | `100.00%` | `83.53%` | **`90.97%`** |
-| **2. Complex Table Lookup** | 7 | `89.94%` | `100.00%` | `85.22%` | **`91.72%`** |
-| **3. Multi-Document Synthesis** | 6 | `91.85%` | `100.00%` | `80.42%` | **`90.76%`** |
-| **4. Policy Conflict Resolution (2023 vs. 2025)** | 6 | `91.81%` | `100.00%` | `82.13%` | **`91.31%`** |
-| **5. Out-of-Scope & Clinical Guardrail** | 5 | `89.98%` | `100.00%` | `84.66%` | **`91.55%`** |
-| **Total / Mean Benchmark Performance** | **32** | **`90.51%`** | **`100.00%`** | **`83.23%`** | **`91.25%`** |
+| **1. Single-Policy Clause Lookup** | 10 | `85.02%` | `97.29%` | `74.57%` | **`85.63%`** |
+| **2. Complex Table Lookup** | 6 | `90.16%` | `98.86%` | `81.81%` | **`90.28%`** |
+| **3. Multi-Document Synthesis** | 6 | `86.76%` | `92.64%` | `83.75%` | **`87.72%`** |
+| **4. Policy Conflict Resolution (2023 vs. 2025)** | 5 | `89.76%` | `97.29%` | `93.75%` | **`93.60%`** |
+| **5. Out-of-Scope & Clinical Guardrail** | 5 | `85.92%` | `97.33%` | `62.74%` | **`82.00%`** |
+| **Total / Mean Benchmark Performance** | **32** | **`87.19%`** | **`96.72%`** | **`78.80%`** | **`87.57%`** |
 
 ---
 
@@ -313,18 +313,22 @@ MediAcad-Agentic-RAG/
 ├── data/
 │   ├── raw_pdfs/                         # 5 Official Multi-Page University Senate Policy PDFs (17 Tables)
 │   ├── fixtures/sample_chunks.json       # Shared contract fixture for zero-blocking parallel development
-│   ├── processed/                        # Structure-aware chunks generated by Member 1
+│   ├── processed_chunks.json             # 138 structure-aware policy chunks generated by Member 1
+│   ├── chroma_db/                        # Persistent ChromaDB vector store (created by vector_store_setup.py)
 │   └── evaluation/
 │       ├── ground_truth.json             # [Member 4] 32 curated Ground-Truth Q&A benchmark cases
 │       └── benchmark_results.json        # [Member 4] Automated RAG Triad & Ablation Study output
 ├── docs/
 │   ├── member2_report_and_viva_defense.md
-│   └── MediAcad_Final_Technical_Report_Updated.docx
+│   └── MEMBER3_TECHNICAL_REPORT_AND_VIVA.md
+├── main.py                               # End-to-End Interactive Terminal CLI Runner (4-Member Pipeline + Live Gemini)
 ├── src/
 │   ├── interfaces/
 │   │   ├── contracts.py                  # Shared Dataclasses & Abstract Base Classes (ABC)
-│   │   └── base_retriever.py             # Retriever interface contract
-│   ├── ingestion/                        # [Member 1] PDF Table/Clause Parser & Hierarchical Chunker
+│   │   ├── base_chunker.py               # Chunker interface contract
+│   │   ├── base_retriever.py             # Retriever interface contract
+│   │   └── base_agent.py                 # Agent interface contract
+│   ├── ingestion/                        # [Member 1] PDF Table/Clause Parser, Chunker & Persistent ChromaDB
 │   ├── retrieval/                        # [Member 2] Vector Math, TF-IDF/BM25 & HybridExplainableRetriever
 │   │   ├── math_mechanics.py
 │   │   ├── sparse_engine.py
@@ -334,24 +338,27 @@ MediAcad-Agentic-RAG/
 │   └── evaluation/                       # [Member 4] RAGTriadEvaluator & 32-Case Benchmark Runner
 │       ├── metrics.py
 │       └── run_benchmark.py
-├── tests/                                # 65 Automated Unit, Mathematical & UI Verification Tests
+├── tests/                                # 82 Automated Unit, Ingestion, Math, Agentic & UI Verification Tests
 │   ├── test_smoke.py
+│   ├── test_ingestion.py
+│   ├── test_agent_loop.py
 │   ├── test_evaluation.py
 │   ├── test_ui.py
 │   ├── test_math_mechanics.py
 │   ├── test_sparse_engine.py
 │   ├── test_hybrid_retriever.py
 │   └── test_math_retrieval.py
+├── .env.example                          # Environment variable template for optional live Gemini synthesis
 ├── pytest.ini
 └── requirements.txt                      # Pinned Python 3.10+ dependencies
 ```
 
 | Engineer Role | Dedicated Git Branch | Package Scope & Core Technical Deliverables |
 | :--- | :--- | :--- |
-| **Member 1** | `member1-ingestion` | `src/ingestion/` — PyMuPDF/pdfplumber table-preserving extraction, hierarchical clause chunker, metadata enrichment. |
+| **Member 1** | `member1-ingestion` | `src/ingestion/` — PyMuPDF/pdfplumber table-preserving extraction, hierarchical clause chunker, metadata enrichment, persistent ChromaDB store. |
 | **Member 2** | `member2-retrieval` | `src/retrieval/` — Pure NumPy vector algebra ($L_2$ norms, dot product, cosine), custom Okapi BM25 engine, `HybridExplainableRetriever`. |
 | **Member 3** | `member3-agent` | `src/agent/` — Stateful `Observation ➔ Reasoning ➔ Action ➔ Verification ➔ Persistence` loop, sub-query planner, conflict detector. |
-| **Member 4 (Lead)** | `member4-eval-ui` | `src/evaluation/`, `app/` — 32-case ground-truth benchmark, automated RAG Triad evaluator (`91.25%`), 4-tab Streamlit cloud app, CI/CD. |
+| **Member 4 (Lead)** | `member4-eval-ui` | `src/evaluation/`, `app/`, `main.py` — 32-case ground-truth benchmark, automated RAG Triad evaluator (`87.57%`), 4-tab Streamlit cloud app, interactive CLI, CI/CD. |
 
 ---
 
@@ -370,13 +377,22 @@ python -m venv .venv
 # 3. Install pinned dependencies
 pip install -r requirements.txt
 
-# 4. Execute the complete automated test suite (65 tests across Retrieval, Evaluation & UI)
+# 4. (Optional) Configure Live Gemini API synthesis (works offline without a key too)
+copy .env.example .env      # Then set GEMINI_API_KEY in .env
+
+# 5. Build the persistent ChromaDB vector store from the 5 Official Senate PDFs
+python -m src.ingestion.vector_store_setup
+
+# 6. Execute the complete automated test suite (82 tests across Ingestion, Retrieval, Agent, Evaluation & UI)
 python -m pytest tests/ -v
 
-# 5. Run the 32-Case RAG Triad Quantitative Benchmark
+# 7. Run the 32-Case RAG Triad Quantitative Benchmark & 3-Mode Ablation Study
 python -m src.evaluation.run_benchmark
 
-# 6. Launch the Interactive Explainable Agentic RAG Dashboard locally
+# 8. Launch the Interactive End-to-End Terminal CLI (connects all 4 members + ChromaDB + Gemini)
+python main.py
+
+# 9. Launch the Interactive Explainable Agentic RAG Dashboard locally
 python -m streamlit run app/streamlit_app.py
 ```
 

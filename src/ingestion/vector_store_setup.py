@@ -13,14 +13,12 @@ import json
 from dataclasses import asdict
 from typing import List, Dict, Any, Optional
 
-# Configure offline model cache path
+# Configure local model cache path (auto-downloads on first run in a fresh venv)
 CACHE_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "data", "model_cache")
 )
 os.environ["HF_HOME"] = CACHE_DIR
 os.environ["SENTENCE_TRANSFORMERS_HOME"] = CACHE_DIR
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 import chromadb
@@ -36,11 +34,18 @@ class LocalSentenceTransformerEmbeddingFunction(chromadb.EmbeddingFunction):
         self.model_name = model_name
         self.cache_folder = cache_folder or CACHE_DIR
         os.makedirs(self.cache_folder, exist_ok=True)
-        self.model = SentenceTransformer(
-            model_name,
-            cache_folder=self.cache_folder,
-            local_files_only=True
-        )
+        try:
+            self.model = SentenceTransformer(
+                model_name,
+                cache_folder=self.cache_folder,
+                local_files_only=True,
+            )
+        except Exception:
+            self.model = SentenceTransformer(
+                model_name,
+                cache_folder=self.cache_folder,
+                local_files_only=False,
+            )
 
     def __call__(self, input: List[str]) -> List[List[float]]:
         embeddings = self.model.encode(input, convert_to_numpy=True, show_progress_bar=False)
@@ -52,8 +57,22 @@ class LocalSentenceTransformerEmbeddingFunction(chromadb.EmbeddingFunction):
     def embed_documents(self, input: List[str]) -> List[List[float]]:
         return self(input)
 
-    def name(self) -> str:
-        return f"SentenceTransformer_{self.model_name}"
+    @staticmethod
+    def name() -> str:
+        return "SentenceTransformer_all-MiniLM-L6-v2"
+
+    def get_config(self) -> Dict[str, Any]:
+        return {
+            "model_name": self.model_name,
+            "cache_folder": self.cache_folder,
+        }
+
+    @staticmethod
+    def build_from_config(config: Dict[str, Any]) -> "LocalSentenceTransformerEmbeddingFunction":
+        return LocalSentenceTransformerEmbeddingFunction(
+            model_name=config.get("model_name", "all-MiniLM-L6-v2"),
+            cache_folder=config.get("cache_folder"),
+        )
 
 
 class PersistentChromaStore:
