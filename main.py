@@ -8,12 +8,14 @@ Connects all 4 team members' modules in one unified terminal pipeline:
 """
 
 import json
+import os
 import re
 import sys
+import threading
 import time
 import zlib
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -145,11 +147,109 @@ def describe_attendance_zone(att_pct: Optional[float]) -> Optional[str]:
     )
 
 
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+
+GEMINI_SYSTEM_PROMPT = (
+    "You are MediAcad, an Explainable University Medical-Academic Policy Advisor. "
+    "Answer the student's question in clear, concise professional English using ONLY the "
+    "Retrieved Official Policy Evidence provided below. Always cite the exact Doc ID "
+    "(e.g., POL-MED-WF-04), Clause/Table ID, Page Number, and official form codes. "
+    "Never invent rules, deadlines, or clinical medical advice not in the evidence."
+)
+
+
+def _init_gemini_client() -> Optional[Any]:
+    """Loads GEMINI_API_KEY from .env/environment and initializes a Gemini client if valid."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(override=True)
+    except Exception:
+        pass
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key or api_key == "your_gemini_api_key_here":
+        return None
+
+    try:
+        from google import genai
+        from google.genai import types
+
+        http_opts = types.HttpOptions(
+            timeout=12000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        )
+        return genai.Client(api_key=api_key, http_options=http_opts)
+    except Exception:
+        return None
+
+
+def _call_gemini_synthesis(
+    gemini_client: Optional[Any],
+    query: str,
+    retrieved: List[RetrievalResult],
+    att_note: Optional[str],
+    conflicts: List[Any],
+    timeout_sec: float = 12.0,
+) -> Optional[str]:
+    """Generates a strictly grounded live Gemini answer with a non-blocking timeout fallback."""
+    if gemini_client is None or not retrieved:
+        return None
+
+    evidence_blocks = []
+    for r in retrieved[:3]:
+        evidence_blocks.append(
+            f"[{r.chunk.doc_id} | {r.chunk.policy_version} | {r.chunk.clause_id} | "
+            f"Page {r.chunk.page_number}]\n{clean_chunk_text(r.chunk.text)}"
+        )
+
+    conflict_notes = "\n".join(
+        f"- {c.conflict_id} ({c.topic}): {c.authoritative_rule_summary}"
+        for c in conflicts
+    )
+    prompt = (
+        f"{GEMINI_SYSTEM_PROMPT}\n\n"
+        f"STUDENT QUESTION:\n{query}\n\n"
+        f"RETRIEVED OFFICIAL POLICY EVIDENCE:\n" + "\n\n".join(evidence_blocks)
+    )
+    if att_note:
+        prompt += f"\n\nDYNAMIC ATTENDANCE RULE CHECK:\n{att_note}"
+    if conflict_notes:
+        prompt += f"\n\n2023 vs. 2025 POLICY CONFLICTS DETECTED:\n{conflict_notes}"
+
+    prompt += "\n\nProvide a concise, strictly grounded answer with exact citations:"
+
+    result_box: dict[str, Optional[str]] = {"text": None}
+
+    def _invoke() -> None:
+        try:
+            from google.genai import types
+
+            cfg = types.GenerateContentConfig(
+                temperature=0.1,
+                thinking_config=types.ThinkingConfig(thinking_level="low"),
+            )
+            resp = gemini_client.models.generate_content(
+                model=GEMINI_MODEL, contents=prompt, config=cfg
+            )
+            if resp and getattr(resp, "text", None):
+                result_box["text"] = resp.text.strip()
+        except Exception:
+            result_box["text"] = None
+
+    worker = threading.Thread(target=_invoke, daemon=True)
+    worker.start()
+    worker.join(timeout=timeout_sec)
+    return result_box["text"]
+
+
 def synthesize_terminal_answer(
     query: str,
     obs: ObservationResult,
     retrieved: List[RetrievalResult],
     evaluator: RAGTriadEvaluator,
+    gemini_client: Optional[Any] = None,
+    conflicts: Optional[List[Any]] = None,
 ) -> tuple[str, str]:
     """Synthesizes a strictly grounded answer while enforcing Clinical & Out-of-Scope guardrails."""
     q_lower = query.lower()
@@ -219,30 +319,43 @@ def synthesize_terminal_answer(
     if att_note:
         lines.append(f"[Dynamic Rule Check] {att_note}\n")
 
-    # Match verified ground-truth summary while blocking mismatched attendance bands
-    best_gt = None
-    best_sim = 0.0
-    for gt in evaluator.ground_truth_cases:
-        if user_att_pct is not None:
-            gt_pct_match = re.search(r"(\d+(?:\.\d+)?)\s*%", gt["query"])
-            if gt_pct_match:
-                gt_pct = float(gt_pct_match.group(1))
-                if _attendance_band(gt_pct) != _attendance_band(user_att_pct):
-                    continue
-        sim = lexical_cosine_similarity(query, gt["query"])
-        if sim > best_sim:
-            best_sim = sim
-            best_gt = gt
-
-    if best_sim >= 0.45 and best_gt is not None:
-        docs_str = ", ".join(best_gt["expected_doc_ids"])
-        clauses_str = ", ".join(best_gt["expected_clauses"])
-        ref_text = best_gt["reference_answer"]
-        if user_att_pct is not None and 70.0 <= user_att_pct < 80.0:
-            ref_text = re.sub(r"\b74%\b", f"{user_att_pct:g}%", ref_text)
-        lines.append(f"[Verified Regulatory Summary | {docs_str} ({clauses_str})]")
-        lines.append(ref_text)
+    # Attempt Live Gemini 3.8 Flash synthesis grounded in top-3 retrieved clauses
+    live_ai_answer = _call_gemini_synthesis(
+        gemini_client=gemini_client,
+        query=query,
+        retrieved=retrieved,
+        att_note=att_note,
+        conflicts=conflicts or [],
+    )
+    if live_ai_answer:
+        lines.append(f"[Live Gemini AI Synthesis ({GEMINI_MODEL})]")
+        lines.append(live_ai_answer)
         lines.append("")
+    else:
+        # Fallback: Match verified ground-truth summary while blocking mismatched attendance bands
+        best_gt = None
+        best_sim = 0.0
+        for gt in evaluator.ground_truth_cases:
+            if user_att_pct is not None:
+                gt_pct_match = re.search(r"(\d+(?:\.\d+)?)\s*%", gt["query"])
+                if gt_pct_match:
+                    gt_pct = float(gt_pct_match.group(1))
+                    if _attendance_band(gt_pct) != _attendance_band(user_att_pct):
+                        continue
+            sim = lexical_cosine_similarity(query, gt["query"])
+            if sim > best_sim:
+                best_sim = sim
+                best_gt = gt
+
+        if best_sim >= 0.45 and best_gt is not None:
+            docs_str = ", ".join(best_gt["expected_doc_ids"])
+            clauses_str = ", ".join(best_gt["expected_clauses"])
+            ref_text = best_gt["reference_answer"]
+            if user_att_pct is not None and 70.0 <= user_att_pct < 80.0:
+                ref_text = re.sub(r"\b74%\b", f"{user_att_pct:g}%", ref_text)
+            lines.append(f"[Verified Regulatory Summary | {docs_str} ({clauses_str})]")
+            lines.append(ref_text)
+            lines.append("")
 
     lines.append("[Retrieved Official Policy Clauses (Direct Evidence from 5 PDFs)]")
     for r in retrieved[:3]:
@@ -271,7 +384,14 @@ def run_interactive_cli() -> None:
     verifier = EvidenceVerifier()
     session_logger = PersistentSessionLogger()
     evaluator = RAGTriadEvaluator()
+    gemini_client = _init_gemini_client()
+    mode_label = (
+        f"Live Gemini AI ({GEMINI_MODEL}) + Offline Fallback"
+        if gemini_client is not None
+        else "Offline Deterministic Mode (no GEMINI_API_KEY set)"
+    )
     print(f"Ready! Loaded {len(chunks)} policy chunks in {(time.perf_counter() - t_init):.2f}s.")
+    print(f"Synthesis Mode: {mode_label}")
     print("Type any university medical/academic policy question below (type 'exit' to quit).\n")
 
     query_count = 0
@@ -302,7 +422,14 @@ def run_interactive_cli() -> None:
         conflicts = verifier.detect_conflicts(retrieved)
 
         # Grounded Answer Synthesis & Member 4 Live Groundedness Evaluation
-        answer, status = synthesize_terminal_answer(user_query, obs, validated, evaluator)
+        answer, status = synthesize_terminal_answer(
+            user_query,
+            obs,
+            validated,
+            evaluator,
+            gemini_client=gemini_client,
+            conflicts=conflicts,
+        )
         if status == "OUT_OF_SCOPE_ABSTAINED":
             grounded_str = "N/A (Abstained Safely)"
             conflicts = []
