@@ -77,9 +77,13 @@ class QueryPlanner:
         days_match = re.search(r"(\d+)\s*(?:day|days|දින|දවස්)", query_lower)
         hospitalization_days = int(days_match.group(1)) if days_match else None
 
-        # 2. Extract Attendance Percentage
-        att_match = re.search(r"(\d+(?:\.\d+)?)\s*%", query_lower)
-        attendance_pct = float(att_match.group(1)) if att_match else None
+        # 2. Extract Attendance Percentage (ignore small coursework penalty % like 2% or 5%)
+        attendance_pct = None
+        for att_match in re.finditer(r"(\d+(?:\.\d+)?)\s*%", query_lower):
+            candidate = float(att_match.group(1))
+            if 25.0 <= candidate <= 100.0:
+                attendance_pct = candidate
+                break
 
         # 3. Detect Medical Condition
         condition = None

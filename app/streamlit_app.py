@@ -37,15 +37,12 @@ from src.interfaces.contracts import (
 )
 from src.evaluation.metrics import RAGTriadEvaluator, tokenize, lexical_cosine_similarity
 from src.evaluation.run_benchmark import run_full_benchmark
-from src.ingestion.clause_chunker import ClauseAwareChunker
-from src.retrieval.hybrid_retriever import HybridExplainableRetriever
 from src.retrieval.math_mechanics import (
     vector_magnitude,
     dot_product,
     cosine_similarity as math_cosine_similarity,
     hybrid_fuse_score,
 )
-from src.agent.mediacad_agent import MediAcadAgent
 
 st.set_page_config(
     page_title="MediAcad | Explainable Agentic RAG",
@@ -223,7 +220,7 @@ def _get_supplementary_policy_chunks() -> List[DocumentChunk]:
                 "register declares themselves medically fit to sit; retrospective medical certificates are rejected. "
                 "Acute Illness Collapse Exception (Clause 2.2): If a student falls acutely ill during an examination, "
                 "they must notify the Chief Invigilator before leaving, get logged in the Invigilator Incident Report "
-                "(Form INV-01), report immediately to the University Medical Center (UMC) for clinical stabilization, "
+                "(Form INV-09), report immediately to the University Medical Center (UMC) for clinical stabilization, "
                 "and file Form EC-01 within 5 working days for an uncapped I-Med deferral."
             ),
         },
@@ -244,9 +241,9 @@ def _get_supplementary_policy_chunks() -> List[DocumentChunk]:
                 "Waiver via Form ATT-02B, Hospital Discharge Summary, Form MED-04-CLR, and an Academic Catch-Up Plan "
                 "within 5 working days of discharge. Clause 3.2 (Absolute Minimum Attendance Floor <65.0%): Under NO "
                 "circumstances may any student with raw attendance below 65.0% (e.g., 63%) be permitted to sit the final "
-                "examination; the student receives Not Qualified (NQ) / Barred status and must apply for a Medical "
-                "Semester Withdrawal (Form WDR-02). Clause 4.1: Clinical/Lab attendance requires 100% completion via "
-                "Supervised Make-Up Lab Sessions (Form LAB-02M)."
+                "examination; the student receives Not Qualified (NQ) / Barred status and must apply for Temporary "
+                "Medical Intercalation (Form PRG-05-INT). Clause 4.1: Clinical/Lab attendance requires 100% completion via "
+                "Supervised Make-Up Lab Sessions (Form LAB-MK-01)."
             ),
         },
         {
@@ -346,6 +343,22 @@ def load_benchmark_data() -> Dict[str, Any]:
     if not bench_path.exists():
         run_full_benchmark()
     return json.loads(bench_path.read_text(encoding="utf-8"))
+
+
+@st.cache_data
+def get_persistent_vector_store_status() -> str:
+    """Safely inspects Member 1's persistent ChromaDB collection without blocking cloud startup."""
+    chroma_dir = PROJECT_ROOT / "data" / "chroma_db"
+    if not chroma_dir.is_dir():
+        return "Processed JSON Corpus (`data/processed_chunks.json`)"
+    try:
+        import chromadb
+
+        client = chromadb.PersistentClient(path=str(chroma_dir))
+        col = client.get_collection(name="academic_policies")
+        return f"Persistent ChromaDB (`{col.count()}` vectors in `data/chroma_db`)"
+    except Exception:
+        return "Processed JSON Corpus (`data/processed_chunks.json`)"
 
 
 def compute_live_hybrid_retrieval(
@@ -975,11 +988,15 @@ with st.sidebar:
 
     st.divider()
     st.markdown("### 📌 System Architecture Info")
+    sidebar_bench = load_benchmark_data()
+    sidebar_overall_pct = sidebar_bench["summary"]["mean_overall_score"] * 100.0
+    vector_store_status = get_persistent_vector_store_status()
     st.info(
         "**Module:** DS205.3 Data Science with Python\n\n"
-        "**Corpus:** 5 Official Senate PDFs (18+ Tables)\n\n"
+        "**Corpus:** 5 Official Senate PDFs (17 Tables)\n\n"
+        f"**Vector Persistence:** {vector_store_status}\n\n"
         "**Benchmark:** 32 Ground-Truth Cases\n\n"
-        "**Mean RAG Triad Score:** `91.25%`"
+        f"**Mean RAG Triad Score:** `{sidebar_overall_pct:.2f}%`"
     )
 
     if "agent_history" not in st.session_state:
@@ -1319,12 +1336,16 @@ with tab2:
 with tab3:
     st.subheader("📊 Quantitative RAG Triad Evaluation Benchmark (32 Ground-Truth Cases)")
     summary = bench_data["summary"]
+    sparse_ab = bench_data["ablation_study"][0]
+    cr_delta = (summary["mean_context_relevance"] - sparse_ab["context_relevance"]) * 100.0
+    ar_delta = (summary["mean_answer_relevance"] - sparse_ab["answer_relevance"]) * 100.0
+    ov_delta = (summary["mean_overall_score"] - sparse_ab["overall_triad"]) * 100.0
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("1. Mean Context Relevance", f"{summary['mean_context_relevance'] * 100:.2f}%", "+12.4% vs BM25")
-    k2.metric("2. Mean Groundedness (Faithfulness)", f"{summary['mean_groundedness'] * 100:.2f}%", "Zero Hallucination")
-    k3.metric("3. Mean Answer Relevance", f"{summary['mean_answer_relevance'] * 100:.2f}%", "+3.8% vs BM25")
-    k4.metric("Overall RAG Triad Score", f"{summary['mean_overall_score'] * 100:.2f}%", "High Distinction Tier")
+    k1.metric("1. Mean Context Relevance", f"{summary['mean_context_relevance'] * 100:.2f}%", f"{cr_delta:+.2f}% vs BM25")
+    k2.metric("2. Mean Groundedness (Faithfulness)", f"{summary['mean_groundedness'] * 100:.2f}%", "Verified Citations")
+    k3.metric("3. Mean Answer Relevance", f"{summary['mean_answer_relevance'] * 100:.2f}%", f"{ar_delta:+.2f}% vs BM25")
+    k4.metric("Overall RAG Triad Score", f"{summary['mean_overall_score'] * 100:.2f}%", f"{ov_delta:+.2f}% vs BM25")
 
     # Upgrade 4: Spacious 2-Column Chart Row (Bar Chart + RAG Triad Radar Chart)
     c_left, c_right = st.columns([1.1, 1.0])
@@ -1381,7 +1402,7 @@ with tab3:
                 bgcolor="rgba(15, 41, 66, 0.28)",
                 radialaxis=dict(
                     visible=True,
-                    range=[0.70, 1.02],
+                    range=[0.60, 1.02],
                     gridcolor="rgba(148, 163, 184, 0.3)",
                 ),
                 angularaxis=dict(
@@ -1529,7 +1550,10 @@ with tab4:
 
     st.markdown("#### 🔍 Interactive Policy Clause Explorer")
     explorer_chunks = load_ingested_pdf_chunks()
-    st.caption(f"Showing **{len(explorer_chunks)}** structure-aware policy chunks extracted from the 5 official Senate PDFs (`data/processed_chunks.json`).")
+    st.caption(
+        f"Showing **{len(explorer_chunks)}** structure-aware policy chunks extracted from the 5 official Senate PDFs "
+        f"(`data/processed_chunks.json`) | Vector Store: {get_persistent_vector_store_status()}."
+    )
     selected_doc = st.selectbox(
         "Filter Indexed Clauses by Policy Document:",
         ["All Documents"] + sorted({c.doc_id for c in explorer_chunks}),

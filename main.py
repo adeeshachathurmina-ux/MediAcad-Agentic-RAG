@@ -15,12 +15,12 @@ import threading
 import time
 import zlib
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    getattr(sys.stdout, "reconfigure")(encoding="utf-8", errors="replace")
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -106,6 +106,52 @@ def load_all_policy_chunks() -> List[DocumentChunk]:
         raw = json.loads(processed_path.read_text(encoding="utf-8"))
         return [DocumentChunk(**item) for item in raw]
     return ClauseAwareChunker().parse_and_chunk(str(PROJECT_ROOT / "data" / "raw_pdfs"))
+
+
+def connect_persistent_vector_store(
+    chunks: List[DocumentChunk],
+) -> Tuple[Optional[Callable[[List[str]], np.ndarray]], str]:
+    """
+    Connects to Member 1's persistent ChromaDB vector store (data/chroma_db) when built locally.
+    Reads persisted embeddings directly from disk for indexed chunks and embeds live queries via
+    SentenceTransformer (all-MiniLM-L6-v2), with zero-crash fallback if unavailable.
+    """
+    chroma_dir = PROJECT_ROOT / "data" / "chroma_db"
+    if not chroma_dir.is_dir():
+        return None, "In-Memory Vector Index (run `python -m src.ingestion.vector_store_setup` for ChromaDB)"
+
+    try:
+        from src.ingestion.vector_store_setup import PersistentChromaStore
+        from src.retrieval.sparse_engine import extract_chunk_search_text
+
+        store = PersistentChromaStore(persist_dir=str(chroma_dir))
+        total_vectors = store.collection.count()
+        if total_vectors == 0:
+            return None, "ChromaDB Empty (using In-Memory Vector Fallback)"
+
+        ids = [c.chunk_id for c in chunks]
+        fetched = store.collection.get(ids=ids, include=["embeddings"])
+        fetched_ids = fetched.get("ids") or []
+        fetched_embs = fetched.get("embeddings")
+        if fetched_embs is None or len(fetched_ids) != len(chunks):
+            return None, f"Persistent ChromaDB ({total_vectors} vectors in data/chroma_db; hybrid fallback)"
+
+        text_to_emb = {
+            extract_chunk_search_text(chunk): np.asarray(emb, dtype=np.float64)
+            for chunk, emb in zip(chunks, fetched_embs)
+        }
+
+        def chroma_backed_embedder(texts: List[str]) -> np.ndarray:
+            if len(texts) == len(chunks) and all(t in text_to_emb for t in texts):
+                return np.vstack([text_to_emb[t] for t in texts])
+            return np.asarray(store.embedding_fn(texts), dtype=np.float64)
+
+        return (
+            chroma_backed_embedder,
+            f"Persistent ChromaDB ({total_vectors} persisted vectors in data/chroma_db)",
+        )
+    except Exception:
+        return None, "In-Memory Vector Index (ChromaDB optional dependency unavailable)"
 
 
 def _attendance_band(pct: float) -> str:
@@ -319,7 +365,7 @@ def synthesize_terminal_answer(
     if att_note:
         lines.append(f"[Dynamic Rule Check] {att_note}\n")
 
-    # Attempt Live Gemini 3.8 Flash synthesis grounded in top-3 retrieved clauses
+    # Attempt Live Gemini synthesis grounded in top-3 retrieved clauses
     live_ai_answer = _call_gemini_synthesis(
         gemini_client=gemini_client,
         query=query,
@@ -377,8 +423,11 @@ def run_interactive_cli() -> None:
 
     t_init = time.perf_counter()
     chunks = load_all_policy_chunks()
+    chroma_embedder, vector_store_label = connect_persistent_vector_store(chunks)
     retriever = HybridExplainableRetriever(
-        chunks=chunks, alpha=0.50, dense_embedder=fast_vector_embedder
+        chunks=chunks,
+        alpha=0.50,
+        dense_embedder=chroma_embedder or fast_vector_embedder,
     )
     planner = QueryPlanner()
     verifier = EvidenceVerifier()
@@ -391,6 +440,7 @@ def run_interactive_cli() -> None:
         else "Offline Deterministic Mode (no GEMINI_API_KEY set)"
     )
     print(f"Ready! Loaded {len(chunks)} policy chunks in {(time.perf_counter() - t_init):.2f}s.")
+    print(f"Vector Store  : {vector_store_label}")
     print(f"Synthesis Mode: {mode_label}")
     print("Type any university medical/academic policy question below (type 'exit' to quit).\n")
 

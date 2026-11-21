@@ -33,7 +33,7 @@ jobs:
 
       - name: Check Python Syntax Across All Packages
         run: |
-          python -m compileall src tests
+          python -m compileall src tests main.py app/streamlit_app.py
 
       - name: Run Automated Pytest Suite
         run: |

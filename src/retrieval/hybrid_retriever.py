@@ -136,11 +136,26 @@ class HybridExplainableRetriever(BaseRetriever):
                 raise TypeError("dense_embedder must be callable or have an encode() method.")
             return np.asarray(vectors, dtype=np.float64)
 
-        # 2. Try loading SentenceTransformer
+        # 2. Try loading SentenceTransformer (prefer Member 1's local data/model_cache)
         try:
+            from pathlib import Path
             from sentence_transformers import SentenceTransformer
+
             if not hasattr(self, "_default_st_model") or self._default_st_model is None:
-                self._default_st_model = SentenceTransformer("all-MiniLM-L6-v2")
+                cache_dir = str(
+                    Path(__file__).resolve().parent.parent.parent / "data" / "model_cache"
+                )
+                try:
+                    self._default_st_model = SentenceTransformer(
+                        "all-MiniLM-L6-v2",
+                        cache_folder=cache_dir,
+                        local_files_only=True,
+                    )
+                except Exception:
+                    self._default_st_model = SentenceTransformer(
+                        "all-MiniLM-L6-v2",
+                        cache_folder=cache_dir,
+                    )
             vectors = self._default_st_model.encode(texts, show_progress_bar=False)
             return np.asarray(vectors, dtype=np.float64)
         except Exception:
