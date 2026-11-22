@@ -38,10 +38,7 @@ from src.ingestion.clause_chunker import ClauseAwareChunker
 from src.retrieval.hybrid_retriever import HybridExplainableRetriever
 from src.agent.evidence_verifier import EvidenceVerifier
 from src.evaluation.metrics import RAGTriadEvaluator, tokenize
-from src.evaluation.run_benchmark import (
-    _synthesize_grounded_response,
-    run_full_benchmark,
-)
+from src.evaluation.run_benchmark import run_full_benchmark
 
 st.set_page_config(
     page_title="MediAcad | Explainable Agentic RAG",
@@ -305,7 +302,7 @@ def _call_optional_gemini(
     retrieved: List[RetrievalResult],
     conflicts: List[PolicyConflictAlert],
     att_note: Optional[str],
-    timeout_sec: float = 12.0,
+    timeout_sec: float = 20.0,
 ) -> Optional[str]:
     """Generates a strictly grounded live Gemini summary with non-blocking timeout fallback."""
     if not api_key or not retrieved:
@@ -314,7 +311,7 @@ def _call_optional_gemini(
     evidence_blocks = [
         f"[{r.chunk.doc_id} | {r.chunk.policy_version} | {r.chunk.clause_id} | Page {r.chunk.page_number}]\n"
         f"{clean_policy_display_text(r.chunk.text)}"
-        for r in retrieved[:4]
+        for r in retrieved[:6]
     ]
     conflict_lines = "\n".join(
         f"- {c.conflict_id} ({c.topic}): {c.authoritative_rule_summary}" for c in conflicts
@@ -342,7 +339,7 @@ def _call_optional_gemini(
             client = genai.Client(
                 api_key=api_key,
                 http_options=types.HttpOptions(
-                    timeout=12000,
+                    timeout=20000,
                     retry_options=types.HttpRetryOptions(attempts=1),
                 ),
             )
@@ -440,6 +437,15 @@ def _build_domain_checklist_and_forms(
         )
 
     if any(w in q_lower for w in ("attendance", "condonation", "waiver", "barred", "lab")) or att_pct is not None:
+        if att_pct is not None and att_pct >= 80.0:
+            return (
+                [
+                    f"Eligible Safe Zone ({att_pct:.1f}% >= 80.0% baseline under POL-ACAD-AT-02 Clause 1.1): No attendance condonation form is required.",
+                    "Maintain attendance at or above 80.0% across all lectures and mandatory practical/laboratory sessions.",
+                    "Only submit Form LAB-MK-01 if a mandatory graded laboratory session was missed.",
+                ],
+                ["No Attendance Condonation Form Required (Safe Zone ≥80%)", "Form LAB-MK-01 (only if mandatory lab missed)"],
+            )
         if att_pct is not None and att_pct < 65.0:
             return (
                 [
@@ -498,6 +504,17 @@ def _build_domain_checklist_and_forms(
             ["Independent SLMC Medical Certificate", "Form MED-04-CLR (UMC Audit Clearance)"],
         )
 
+    if re.search(r"\b(collapse|midway|mid-exam|mid-examination|during an exam|during a written|inv-09|syncope|evacuated|faint)\b", q_lower):
+        return (
+            [
+                "Immediately raise your hand and notify the Chief Invigilator prior to leaving the examination hall (POL-ACAD-EX-01 Sub-clause 2.2.1 (a)).",
+                "Ensure the Chief Invigilator records exact departure time & clinical symptoms on Form INV-09 and seals your partial script (Sub-clause 2.2.1 (b)).",
+                "Report directly under escort to the University Medical Center (UMC) within 2 hours for immediate clinical examination (Sub-clause 2.2.1 (c)).",
+                "Submit Form EC-01 + Form INV-09 + Campus Medical Officer Report (Form MED-04-CLR) within 5 working days for uncapped I-Med deferral (Table 2.1).",
+            ],
+            ["Form INV-09 (Acute Mid-Exam Incident Log)", "Campus Medical Officer Report (Form MED-04-CLR)", "Form EC-01"],
+        )
+
     return (
         [
             "Log Initial Absence Notification on the Student Portal within 48 hours (POL-ACAD-EX-01 Clause 3.1).",
@@ -506,6 +523,130 @@ def _build_domain_checklist_and_forms(
         ],
         ["Form EC-01", "Form MED-04-CLR", "SLMC Medical Certificate / Discharge Ticket"],
     )
+
+
+def _expand_parent_child_subclauses(
+    retrieved: List[RetrievalResult],
+    all_chunks: List[DocumentChunk],
+) -> Tuple[Optional[DocumentChunk], List[DocumentChunk]]:
+    """
+    Hierarchical Parent-Child Context Expansion:
+    When a top retrieved chunk is a parent Clause (e.g., Clause 2.2) or one of its
+    sub-clauses (e.g., Sub-clause 2.2.1 (b)), pulls the parent Clause and ALL consecutive
+    sibling sub-clauses (a), (b), (c) from the same official PDF in document order.
+    """
+    if not retrieved:
+        return None, []
+
+    for r in retrieved[:2]:
+        c = r.chunk
+        parent_match = re.match(r"^Clause\s+(\d+\.\d+)$", c.clause_id.strip())
+        sub_match = re.match(r"^Sub-clause\s+(\d+\.\d+)\.\d+$", c.clause_id.strip())
+        base_num = parent_match.group(1) if parent_match else (sub_match.group(1) if sub_match else None)
+        if not base_num:
+            continue
+
+        parent_clause: Optional[DocumentChunk] = None
+        child_clauses: List[DocumentChunk] = []
+        for cand in all_chunks:
+            if cand.doc_id != c.doc_id:
+                continue
+            if cand.clause_id.strip() == f"Clause {base_num}" and len(clean_policy_display_text(cand.text)) > 40:
+                if parent_clause is None:
+                    parent_clause = cand
+            elif cand.clause_id.strip().startswith(f"Sub-clause {base_num}."):
+                child_clauses.append(cand)
+
+        if child_clauses:
+            return parent_clause, child_clauses
+
+    return None, []
+
+
+def _format_readable_grounded_answer(
+    retrieved: List[RetrievalResult],
+    parent_clause: Optional[DocumentChunk],
+    child_clauses: List[DocumentChunk],
+    att_note: Optional[str],
+) -> str:
+    """
+    Formats retrieved 138-chunk PDF evidence into a clean, scannable, human-readable
+    Markdown answer (zero raw paragraph walls, zero mashed PDF pipe-tables, 100% grounded).
+    """
+    blocks: List[str] = []
+
+    if att_note:
+        blocks.append(att_note)
+
+    used_chunk_ids: set[str] = set()
+
+    # 1. Primary Governing Clause + Expanded Child Sub-Clauses (if hierarchical procedure exists)
+    if parent_clause or child_clauses:
+        if parent_clause:
+            used_chunk_ids.add(parent_clause.chunk_id)
+            p_text = clean_policy_display_text(parent_clause.text)
+            blocks.append(
+                f"#### 📌 Direct Governing Rule — `{parent_clause.doc_id}` ({parent_clause.clause_id}, Page {parent_clause.page_number})\n\n"
+                f"{p_text}"
+            )
+        if child_clauses:
+            step_lines: List[str] = []
+            for idx, sc in enumerate(child_clauses, start=1):
+                used_chunk_ids.add(sc.chunk_id)
+                sc_text = clean_policy_display_text(sc.text)
+                step_lines.append(f"{idx}. {sc_text}")
+            ref_doc = child_clauses[0].doc_id
+            ref_page = child_clauses[0].page_number
+            blocks.append(
+                f"**Mandatory Step-by-Step Procedure (`{ref_doc}`, Page {ref_page}):**\n"
+                + "\n".join(step_lines)
+            )
+    else:
+        # Pick highest-ranked prose clause first; fall back to Rank #1 if all are tables
+        primary_chunk = next(
+            (r.chunk for r in retrieved if "|" not in r.chunk.text and not r.chunk.clause_id.startswith("Table")),
+            retrieved[0].chunk,
+        )
+        used_chunk_ids.add(primary_chunk.chunk_id)
+        p_text = clean_policy_display_text(primary_chunk.text)
+        if "|" in primary_chunk.text:
+            # Cleanly separate pipe-delimited table rows instead of mashing into one paragraph
+            raw_rows = [ln.strip() for ln in primary_chunk.text.splitlines() if ln.strip() and not ln.strip().startswith("[Doc:") and not set(ln.strip()) <= set("|-: ")]
+            formatted_rows = "\n".join(f"- {re.sub(r'\\s*\\|\\s*', ' — ', row.strip('| '))}" for row in raw_rows[:6])
+            blocks.append(
+                f"#### 📌 Direct Governing Policy — `{primary_chunk.doc_id}` ({primary_chunk.clause_id}, Page {primary_chunk.page_number})\n\n"
+                f"{formatted_rows}"
+            )
+        else:
+            blocks.append(
+                f"#### 📌 Direct Governing Policy — `{primary_chunk.doc_id}` ({primary_chunk.clause_id}, Page {primary_chunk.page_number})\n\n"
+                f"{p_text}"
+            )
+
+    # 2. Supporting Retrieved Provisions (clean concise bullets, skipping raw duplicate tables)
+    supporting_lines: List[str] = []
+    seen_clause_keys: set[Tuple[str, str]] = {(c.doc_id, c.clause_id) for c in ([parent_clause] if parent_clause else []) + child_clauses}
+    for r in retrieved:
+        ch = r.chunk
+        if ch.chunk_id in used_chunk_ids or (ch.doc_id, ch.clause_id) in seen_clause_keys:
+            continue
+        if "|" in ch.text or ch.clause_id.startswith("Table"):
+            continue
+        clean_t = clean_policy_display_text(ch.text)
+        if len(clean_t) < 40:
+            continue
+        used_chunk_ids.add(ch.chunk_id)
+        seen_clause_keys.add((ch.doc_id, ch.clause_id))
+        supporting_lines.append(
+            f"- **`{ch.doc_id}` ({ch.clause_id}, Page {ch.page_number}):** {clean_t}"
+        )
+        if len(supporting_lines) >= 2:
+            break
+
+    if supporting_lines:
+        blocks.append("**Supporting Policy Provisions:**\n" + "\n".join(supporting_lines))
+
+    return "\n\n".join(blocks)
 
 
 def _plan_targeted_subqueries(query: str, att_pct: Optional[float]) -> List[str]:
@@ -576,7 +717,7 @@ def execute_explainable_agent_workflow(
         detected_issues.append("Multi-Policy Progression & Conflict Audit (HBK-ACAD-PR-05)")
 
     # Step 2 & 3: Member 2 Real Hybrid Retrieval + Word-Boundary Sub-Queries
-    retriever, word_to_idx, idf_vec = _get_cached_hybrid_engine(len(chunks), chunks[0].chunk_id, chunks)
+    retriever, _, _ = _get_cached_hybrid_engine(len(chunks), chunks[0].chunk_id, chunks)
     retriever.set_alpha(alpha)
     primary = retriever.retrieve(query, top_k=5)
 
@@ -691,11 +832,17 @@ def execute_explainable_agent_workflow(
         cid = c.conflict_id
         if cid == "CONF-EXAM-01" and (is_legacy_ask or is_multi_hosp) and any(w in q_lower for w in ("exam", "7 calendar", "7 days", "5 working")):
             conflict_alerts.append(c)
-        elif cid == "CONF-ATT-02" and (any(w in q_lower for w in ("attendance", "condonation", "waiver", "60%", "barred")) or (detected_att_pct is not None and detected_att_pct < 70.0)):
+        elif cid == "CONF-ATT-02" and not (detected_att_pct is not None and detected_att_pct >= 80.0) and (
+            any(w in q_lower for w in ("attendance", "condonation", "waiver", "60%", "barred"))
+            or (detected_att_pct is not None and detected_att_pct < 70.0)
+        ):
             conflict_alerts.append(c)
         elif cid == "CONF-CW-03" and any(w in q_lower for w in ("late", "penalty", "2%", "5%", "deduction")):
             conflict_alerts.append(c)
-        elif cid == "CONF-EXT-04" and any(w in q_lower for w in ("21-day", "21 days", "lecturer", "extension")):
+        elif cid == "CONF-EXT-04" and (
+            any(w in q_lower for w in ("21-day", "21 days", "lecturer", "maximum extension", "how many days"))
+            or (is_legacy_ask and "extension" in q_lower)
+        ):
             conflict_alerts.append(c)
         elif cid == "CONF-MED-05" and any(w in q_lower for w in ("ayurvedic", "private")):
             conflict_alerts.append(c)
@@ -743,6 +890,25 @@ def execute_explainable_agent_workflow(
     else:
         checklist, req_docs = _build_domain_checklist_and_forms(q_lower, False, detected_att_pct)
         confidence_status = "VERIFIED"
+
+        # Hierarchical Parent-Child Expansion: automatically pull complete (a), (b), (c) steps
+        parent_clause, child_clauses = _expand_parent_child_subclauses(retrieved, chunks)
+        existing_ids = {r.chunk.chunk_id for r in retrieved}
+        base_score = retrieved[0].hybrid_score if retrieved else 0.5
+        for extra_c in ([parent_clause] if parent_clause else []) + child_clauses:
+            if extra_c and extra_c.chunk_id not in existing_ids:
+                retrieved.append(
+                    RetrievalResult(
+                        chunk=extra_c,
+                        sparse_score=retrieved[0].sparse_score if retrieved else 0.5,
+                        dense_score=retrieved[0].dense_score if retrieved else 0.5,
+                        hybrid_score=round(max(base_score - 0.01, 0.0), 4),
+                        rank=len(retrieved) + 1,
+                        math_trace=retrieved[0].math_trace if retrieved else None,
+                    )
+                )
+                existing_ids.add(extra_c.chunk_id)
+
         live_gemini_text = None
         if use_live_gemini:
             api_key = _resolve_gemini_api_key()
@@ -762,22 +928,24 @@ def execute_explainable_agent_workflow(
                 sections.append(att_note)
             sections.append(f"#### 🤖 Live Gemini Grounded Synthesis (`{GEMINI_MODEL}`)\n\n{live_gemini_text}")
         else:
-            extractive_summary = _synthesize_grounded_response(
-                query=query,
+            synthesis_mode = "Structured Extractive Synthesis (Parent-Child Clause Expansion)"
+            structured_answer = _format_readable_grounded_answer(
                 retrieved=retrieved,
-                conflicts=conflict_alerts,
-                word_to_idx=word_to_idx,
-                idf_vec=idf_vec,
-                apply_agentic=True,
+                parent_clause=parent_clause,
+                child_clauses=child_clauses,
+                att_note=att_note,
             )
-            sections.append(f"#### ✅ Grounded Policy Synthesis (Retrieved from 138 PDF Chunks)\n\n{extractive_summary}")
+            sections.append(structured_answer)
 
-        citations_md = "\n".join(
-            f"- **`{r.chunk.doc_id}` ({r.chunk.policy_version}, {r.chunk.clause_id}, Page {r.chunk.page_number}):** "
-            f"{clean_policy_display_text(r.chunk.text)[:240]}..."
-            for r in retrieved[:3]
-        )
-        sections.append(f"**Verified Source Citations:**\n{citations_md}")
+        # Compact unique citation index (no noisy repetition of full paragraphs)
+        cited_docs: List[str] = []
+        seen_cites: set[Tuple[str, str]] = set()
+        for r in retrieved[:6]:
+            key = (r.chunk.doc_id, r.chunk.clause_id)
+            if key not in seen_cites:
+                seen_cites.add(key)
+                cited_docs.append(f"`{r.chunk.doc_id}` — {r.chunk.clause_id} (Page {r.chunk.page_number})")
+        sections.append("**Verified Source Index:** " + " • ".join(cited_docs[:5]))
         final_answer = "\n\n".join(sections)
 
     step5 = AgentStepLog(
@@ -816,76 +984,73 @@ gemini_key_available = _resolve_gemini_api_key() is not None
 
 
 # ==============================================================================
-# SIDEBAR CONTROLS
+# SIDEBAR CONTROLS (Simple, Clean & Viva-Ready)
 # ==============================================================================
 with st.sidebar:
-    st.markdown("### ⚙️ Hybrid IR & Agent Controls")
-    alpha_slider = st.slider(
-        "Hybrid Fusion Weight (α)",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.50,
-        step=0.05,
-        help="α = 0.0 uses pure Sparse BM25; α = 1.0 uses pure Dense L2 Cosine; α = 0.50 balances both.",
-    )
-    st.caption(f"Current Formula: `S = {alpha_slider:.2f}·Dense + {1 - alpha_slider:.2f}·BM25`")
+    st.markdown("### 🏥 MediAcad Controls")
 
-    use_gemini_toggle = st.toggle(
-        f"Live Gemini AI Synthesis ({GEMINI_MODEL})",
-        value=False,
-        disabled=not gemini_key_available,
-        help="Enabled automatically when GEMINI_API_KEY is configured in .env or Streamlit Secrets. Runs fast offline extractive synthesis otherwise.",
-    )
-    if not gemini_key_available:
-        st.caption("ℹ️ Running in deterministic zero-key mode (no `GEMINI_API_KEY` set).")
-
-    st.divider()
-    st.markdown("### 🎯 Preset Viva Test Scenarios")
     preset_queries = {
-        "Scenario 1: 10-Day Hospitalization (Exam + 74% Attendance + Coursework)": (
+        "1. 10-Day Hospitalization (Exam + 74% Attendance + Coursework)": (
             "I was hospitalized for 10 days due to dengue fever. Because of this, I missed my final exam, "
             "my attendance dropped to 74%, and I missed a coursework assignment deadline during my hospital stay. "
             "What complete step-by-step procedure and forms must I follow?"
         ),
-        "Scenario 2: 2023 vs. 2025 Conflict (7 Calendar Days vs. 5 Working Days)": (
+        "2. 2023 vs. 2025 Conflict (7 Calendar Days vs. 5 Working Days)": (
             "Can I submit my medical certificate within 7 calendar days after missing my final exam as stated in the 2023 student handbook?"
         ),
-        "Scenario 3: Attendance Hard Floor (63% vs. 65% Minimum)": (
+        "3. Attendance Below 65% Hard Floor (63% Case)": (
             "My attendance dropped to 63% after a 10-day hospitalization, can the Dean grant me an attendance waiver?"
         ),
-        "Scenario 4: Forged Medical Certificate Zero-Tolerance Policy": (
+        "4. Forged Medical Certificate Penalty": (
             "What is the punishment if a student submits a forged or altered medical certificate?"
         ),
-        "Scenario 5: Clinical Safety Guardrail (Dengue & Medication Dosage)": (
+        "5. Clinical Safety Guardrail (Medical Dosage Question)": (
             "I have 103F fever, do I have dengue and what paracetamol dosage should I take before my exam?"
         ),
     }
-    preset_choice = st.selectbox("Load a Benchmark Scenario:", list(preset_queries.keys()))
+    preset_choice = st.selectbox("🎯 Quick Demo Scenarios", list(preset_queries.keys()))
 
     st.divider()
-    st.markdown("### 📌 System Architecture Info")
+    alpha_slider = st.slider(
+        "⚖️ Search Balance (α)",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.50,
+        step=0.05,
+        help="0.0 = Keyword Search (BM25) only | 0.5 = Balanced Hybrid | 1.0 = Vector Meaning (Cosine) only",
+    )
+    st.caption(f"Hybrid Mix: `{1 - alpha_slider:.0%}` Keyword (BM25) + `{alpha_slider:.0%}` Vector (Cosine)")
+
+    use_gemini_toggle = st.toggle(
+        "🤖 Use Live Gemini AI",
+        value=False,
+        disabled=not gemini_key_available,
+        help=(
+            f"Optional: Rewrites retrieved clauses using {GEMINI_MODEL}. "
+            "Add GEMINI_API_KEY in .env or Streamlit Secrets to unlock. Offline verified synthesis works 100% without a key."
+        ),
+    )
+
+    st.divider()
     sidebar_overall_pct = bench_data["summary"]["mean_overall_score"] * 100.0
     vector_store_status = get_persistent_vector_store_status()
-    st.info(
-        "**Module:** DS205.3 Data Science with Python\n\n"
-        f"**Indexed Corpus:** `{len(chunks)}` Chunks (5 Senate PDFs, 17 Tables)\n\n"
-        f"**Vector Persistence:** {vector_store_status}\n\n"
-        "**Benchmark:** 32 Ground-Truth Cases\n\n"
-        f"**Mean RAG Triad Score:** `{sidebar_overall_pct:.2f}%`"
+    st.caption(
+        f"**DS205.3 MediAcad System**\n\n"
+        f"• **Knowledge Base:** 5 Official PDFs (`{len(chunks)}` Clauses)\n\n"
+        f"• **32-Case RAG Triad Score:** `{sidebar_overall_pct:.2f}%`"
     )
     audit_log_placeholder = st.empty()
 
 
 # ==============================================================================
-# HERO BANNER & 4 TABS
+# CLEAN HERO HEADER & 4 SIMPLE TABS
 # ==============================================================================
 st.markdown(
     """
     <div class="hero-box">
-        <div class="hero-title">🏥 MediAcad — Explainable Agentic RAG Case Advisor</div>
+        <div class="hero-title">🏥 MediAcad — University Medical & Academic Policy Advisor</div>
         <div class="hero-sub">
-            138 Structure-Aware PDF Chunks • Member 2 Hybrid BM25 + L2 Cosine Engine •
-            Member 3 EvidenceVerifier 2023 vs. 2025 Conflict Audit • Member 4 RAG Triad Telemetry
+            Ask any question about missed exams, attendance limits, coursework extensions, or medical certificates — verified directly from 5 Official Senate PDFs (2025).
         </div>
     </div>
     """,
@@ -893,15 +1058,15 @@ st.markdown(
 )
 
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🧠 1. Explainable Case Advisor (Agentic Loop)",
-    "📐 2. Mathematical IR Inspector (BM25 & Vector Geometry)",
-    "📊 3. RAG Triad Benchmark & Ablation Study (32 Cases)",
-    "📚 4. Policy Corpus & 2023 vs. 2025 Conflict Matrix",
+    "💬 1. Explainable Case Advisor",
+    "📐 2. Mathematical IR Inspector",
+    "📊 3. RAG Triad Benchmark",
+    "📚 4. Policy Library & Conflict Matrix",
 ])
 
 
 # ==============================================================================
-# TAB 1: EXPLAINABLE CASE ADVISOR
+# TAB 1: EXPLAINABLE CASE ADVISOR (Clean, Simple Student & Viva View)
 # ==============================================================================
 with tab1:
     if "active_query" not in st.session_state or st.session_state.get("last_preset") != preset_choice:
@@ -910,11 +1075,12 @@ with tab1:
 
     with st.form("mediacad_query_form", clear_on_submit=False):
         query_input = st.text_area(
-            "Enter Any University Medical-Academic Case Query:",
+            "Ask a Student Policy Question:",
             value=st.session_state["active_query"],
-            height=90,
+            height=80,
+            placeholder="Example: What exact steps must a student follow if they collapse midway through an exam?",
         )
-        submitted = st.form_submit_button("🚀 Execute Agentic RAG Loop", type="primary", width="stretch")
+        submitted = st.form_submit_button("🔍 Get Verified Policy Answer", type="primary", width="stretch")
         if submitted and query_input.strip():
             st.session_state["active_query"] = query_input.strip()
 
@@ -937,7 +1103,7 @@ with tab1:
         gm = evaluator_live.compute_groundedness(agent_resp.final_answer, agent_resp.retrieved_contexts)
         live_groundedness_str = f"{gm['score'] * 100:.1f}%"
 
-    # Persist execution record into st.session_state & render Sidebar Audit Log immediately
+    # Session history in Sidebar
     if "agent_history" not in st.session_state:
         st.session_state["agent_history"] = []
     if not st.session_state["agent_history"] or st.session_state["agent_history"][-1]["query"] != active_query:
@@ -949,23 +1115,23 @@ with tab1:
         })
 
     with audit_log_placeholder.container():
-        with st.expander(f"🕒 Session State Audit Log ({len(st.session_state['agent_history'])})", expanded=False):
+        with st.expander(f"🕒 Recent Queries ({len(st.session_state['agent_history'])})", expanded=False):
             for entry in reversed(st.session_state["agent_history"][-5:]):
-                st.caption(f"**[{entry['status']}]** {entry['query'][:55]}... (`{entry['latency_ms']:.1f} ms`)")
+                st.caption(f"**[{entry['status']}]** {entry['query'][:50]}... (`{entry['latency_ms']:.0f} ms`)")
 
-    # Top Telemetry KPIs
-    m1, m2, m3, m4 = st.columns(4)
+    # Simple 3-Card Summary Strip
+    m1, m2, m3 = st.columns(3)
     m1.metric("Verification Status", agent_resp.confidence_status)
-    m2.metric("Live Groundedness", live_groundedness_str)
+    m2.metric("Citation Groundedness", live_groundedness_str)
     m3.metric("2023 vs. 2025 Conflicts", f"{len(agent_resp.conflict_alerts)} Alert(s)")
-    m4.metric("Execution Latency", f"{elapsed_ms:.1f} ms")
 
+    # Show Guardrail or Conflict Banners ONLY when triggered
     if agent_resp.confidence_status == "OUT_OF_SCOPE":
         st.markdown(
             """
             <div class="guardrail-banner">
-                <b>🛑 OUT-OF-SCOPE QUERY ABSTAINED (ZERO-HALLUCINATION GUARDRAIL)</b><br/>
-                • Insufficient regulatory term matches across the 5 Official University Senate Policy PDFs.
+                <b>🛑 Out-of-Scope Question (Zero-Hallucination Guardrail)</b><br/>
+                This question does not match the 5 Official University Medical & Academic Policy PDFs.
             </div>
             """,
             unsafe_allow_html=True,
@@ -974,8 +1140,8 @@ with tab1:
         st.markdown(
             """
             <div class="guardrail-banner">
-                <b>🛑 CLINICAL SAFETY GUARDRAIL ACTIVE (POL-MED-WF-04 Clause 1.1)</b><br/>
-                • Clinical disease diagnosis and medication dosage advice are strictly blocked. Refer student to <b>UMC (Building B, Room B-04)</b>.
+                <b>🛑 Clinical Safety Guardrail Active (POL-MED-WF-04 Clause 1.1)</b><br/>
+                MediAcad cannot diagnose illness or advise medication dosage. Please visit the <b>University Medical Center (UMC, Building B, Room B-04)</b>.
             </div>
             """,
             unsafe_allow_html=True,
@@ -985,18 +1151,17 @@ with tab1:
         st.markdown(
             f"""
             <div class="conflict-banner">
-                <b>⚡ POLICY CONFLICT DETECTED ({alert.conflict_id}: {alert.topic})</b><br/>
-                • <b>Obsolete 2023 Handbook ({alert.legacy_doc_id}, {alert.legacy_clause}):</b> {alert.legacy_rule_summary}<br/>
-                • <b>Binding 2025 Policy ({alert.authoritative_doc_id}, {alert.authoritative_clause}):</b> <b>{alert.authoritative_rule_summary}</b>
+                <b>⚡ 2023 vs. 2025 Policy Conflict Detected — {alert.topic}</b><br/>
+                • <b>Old 2023 Handbook ({alert.legacy_clause}):</b> {alert.legacy_rule_summary}<br/>
+                • <b>Active 2025 Rule ({alert.authoritative_doc_id}, {alert.authoritative_clause}):</b> <b>{alert.authoritative_rule_summary}</b>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    left_col, right_col = st.columns([1.35, 1.0])
-
-    with left_col:
-        st.subheader("📋 Verified Academic Case Guidance")
+    # 1. Clean Full-Width Verified Answer Card
+    with st.container(border=True):
+        st.markdown("### 📋 Verified Policy Answer")
         st.markdown(agent_resp.final_answer)
 
         detected_att_pct = extract_attendance_percentage(active_query) if agent_resp.confidence_status != "OUT_OF_SCOPE" else None
@@ -1008,13 +1173,13 @@ with tab1:
             elif detected_att_pct >= 65.0:
                 zone_label, bar_color = "Dean Inpatient Waiver (65–69.9% → Form ATT-02B)", "#F59E0B"
             else:
-                zone_label, bar_color = "Strictly Barred / Hard Floor (<65.0% → Form PRG-05-INT)", "#EF4444"
+                zone_label, bar_color = "Barred / Hard Floor (<65.0% → Form PRG-05-INT)", "#EF4444"
 
             fig_gauge = go.Figure(
                 go.Indicator(
                     mode="gauge+number",
                     value=detected_att_pct,
-                    number={"suffix": "%", "font": {"size": 28}},
+                    number={"suffix": "%", "font": {"size": 26}},
                     title={"text": f"<b>Attendance Zone:</b> {zone_label}", "font": {"size": 14}},
                     gauge={
                         "axis": {"range": [40, 100], "tickwidth": 1},
@@ -1029,139 +1194,131 @@ with tab1:
                     },
                 )
             )
-            fig_gauge.update_layout(height=230, margin=dict(l=20, r=20, t=45, b=10))
+            fig_gauge.update_layout(height=220, margin=dict(l=20, r=20, t=42, b=10))
             st.plotly_chart(fig_gauge, width="stretch")
 
-        if agent_resp.action_checklist:
-            st.markdown("#### ✅ Student Action Checklist (Interactive To-Do)")
-            for idx, item in enumerate(agent_resp.action_checklist, start=1):
-                st.checkbox(item, value=False, key=f"todo_{idx}_{abs(hash(active_query)) % 100000}")
+    # 2. Simple Side-by-Side Action Checklist & Required Forms
+    if agent_resp.action_checklist or agent_resp.required_documents:
+        act_col, form_col = st.columns([1.45, 1.0])
+        with act_col:
+            with st.container(border=True):
+                st.markdown("#### ✅ What To Do Next (Action Checklist)")
+                for idx, item in enumerate(agent_resp.action_checklist, start=1):
+                    st.checkbox(item, value=False, key=f"todo_{idx}_{abs(hash(active_query)) % 100000}")
 
-        if agent_resp.required_documents:
-            st.markdown("#### 🗂️ Required Official Forms & Documents")
-            st.write(" • ".join(f"`{doc}`" for doc in agent_resp.required_documents))
+        with form_col:
+            with st.container(border=True):
+                st.markdown("#### 🗂️ Required Official Forms")
+                for doc in agent_resp.required_documents:
+                    st.markdown(f"- `{doc}`")
 
-            report_md = (
-                "# MEDIACAD OFFICIAL STUDENT CASE ADVISORY PLAN\n\n"
-                f"**Student Query:** {agent_resp.query}\n\n"
-                f"**Status:** {agent_resp.confidence_status} | **Live Groundedness:** {live_groundedness_str}\n\n"
-                f"## 1. Verified Guidance\n{agent_resp.final_answer}\n\n"
-                "## 2. Action Checklist\n"
-                + "\n".join(f"- [ ] {c}" for c in agent_resp.action_checklist)
-                + "\n\n## 3. Required Forms\n"
-                + "\n".join(f"- {d}" for d in agent_resp.required_documents)
-            )
-            st.download_button(
-                label="📥 Download Student Case Advisory Plan (.md)",
-                data=report_md,
-                file_name="MediAcad_Case_Advisory_Plan.md",
-                mime="text/markdown",
-                width="stretch",
-            )
+                report_md = (
+                    "# MEDIACAD STUDENT POLICY ADVISORY PLAN\n\n"
+                    f"**Question:** {agent_resp.query}\n\n"
+                    f"**Status:** {agent_resp.confidence_status} | **Groundedness:** {live_groundedness_str}\n\n"
+                    f"## 1. Verified Policy Answer\n{agent_resp.final_answer}\n\n"
+                    "## 2. Action Checklist\n"
+                    + "\n".join(f"- [ ] {c}" for c in agent_resp.action_checklist)
+                    + "\n\n## 3. Required Forms\n"
+                    + "\n".join(f"- {d}" for d in agent_resp.required_documents)
+                )
+                st.download_button(
+                    label="📥 Download Action Plan (.md)",
+                    data=report_md,
+                    file_name="MediAcad_Case_Advisory_Plan.md",
+                    mime="text/markdown",
+                    width="stretch",
+                )
 
-    with right_col:
-        st.subheader("🔍 Glass-Box 5-Stage Agentic Loop Trace")
+    # 3. Clean Collapsible Viva Inspection Drawers (Hidden by default so the main screen stays simple!)
+    with st.expander(f"🔍 How MediAcad Verified This Answer (5-Step Agent Trace • {elapsed_ms:.0f} ms)", expanded=False):
         for step in agent_resp.reasoning_trace:
-            with st.expander(f"Step {step.step_number}: [{step.phase}] — {step.title}", expanded=(step.step_number in {1, 4})):
-                st.write(step.description)
-                st.json(step.details)
+            st.markdown(f"**Step {step.step_number} — {step.phase} ({step.title}):** {step.description}")
 
-        st.subheader("📑 Top Retrieved Policy Clauses (138-Chunk Corpus)")
+    with st.expander("📑 View Highlighted Source Clauses from the Official PDFs (Top 3)", expanded=False):
         if not agent_resp.retrieved_contexts:
-            st.info("No sufficiently relevant policy clauses matched (Safe Abstention active).")
+            st.info("No matching policy clauses retrieved (Safe Abstention active).")
         else:
             for r in agent_resp.retrieved_contexts[:3]:
-                with st.expander(
-                    f"Rank #{r.rank} | {r.chunk.doc_id} ({r.chunk.clause_id}, p.{r.chunk.page_number}) — Hybrid: {r.hybrid_score:.4f}",
-                    expanded=(r.rank == 1),
-                ):
-                    st.caption(f"**{r.chunk.doc_title}** | {r.chunk.policy_version}")
-                    matched_kw = r.math_trace.matched_query_terms if r.math_trace else []
-                    highlighted = highlight_matched_terms(clean_policy_display_text(r.chunk.text), matched_kw)
-                    st.markdown(highlighted, unsafe_allow_html=True)
+                st.markdown(
+                    f"**Rank #{r.rank} — `{r.chunk.doc_id}` ({r.chunk.clause_id}, Page {r.chunk.page_number})** "
+                    f"| Hybrid Score: `{r.hybrid_score:.4f}`"
+                )
+                matched_kw = r.math_trace.matched_query_terms if r.math_trace else []
+                highlighted = highlight_matched_terms(clean_policy_display_text(r.chunk.text), matched_kw)
+                st.markdown(highlighted, unsafe_allow_html=True)
+                st.divider()
 
 
 # ==============================================================================
-# TAB 2: MATHEMATICAL RETRIEVAL INSPECTOR (Member 2 Live Telemetry)
+# TAB 2: MATHEMATICAL IR INSPECTOR (Clean & Viva-Ready)
 # ==============================================================================
 with tab2:
-    st.subheader("📐 Mathematical Foundations of Hybrid Information Retrieval")
-    st.markdown(
-        r"Live white-box telemetry computed by Member 2's **`HybridExplainableRetriever`** across all **138 PDF chunks** "
-        r"(TF, IDF, Okapi BM25, Vector Magnitude $\lVert \mathbf{v} \rVert_2$, Dot Product $\mathbf{q}\cdot\mathbf{d}$, $L_2$ Cosine Similarity, and Convex Hybrid Fusion)."
+    st.subheader("📐 Mathematical IR Inspector — How Hybrid Search Ranks Clauses")
+    st.caption(
+        f"Live white-box math from Member 2's Hybrid Engine across all {len(chunks)} PDF chunks. "
+        "Move the Search Balance (α) slider in the sidebar to see scores update live."
     )
 
     eq1, eq2, eq3 = st.columns(3)
     with eq1:
-        st.markdown("**1. Smoothed IDF**")
+        st.markdown("**1. Smoothed IDF (Keyword Rarity)**")
         st.latex(r"\text{IDF}(t) = \ln\left(1 + \frac{N - \text{df}(t) + 0.5}{\text{df}(t) + 0.5}\right)")
     with eq2:
-        st.markdown("**2. L2 Cosine Similarity**")
+        st.markdown("**2. L2 Cosine Similarity (Vector Meaning)**")
         st.latex(r"\cos(\theta) = \frac{\mathbf{q} \cdot \mathbf{d}}{\|\mathbf{q}\|_2 \, \|\mathbf{d}\|_2}")
     with eq3:
         st.markdown("**3. Hybrid Score Fusion**")
         st.latex(r"S_{\text{hybrid}} = \alpha \tilde{S}_{\text{dense}} + (1 - \alpha) \tilde{S}_{\text{sparse}}")
 
     if not agent_resp.retrieved_contexts:
-        st.info("Enter an in-scope university policy query in Tab 1 to inspect live vector math.")
+        st.info("Ask an in-scope university policy question in Tab 1 to inspect live hybrid retrieval math.")
     else:
-        # Compute strictly direct retrieval telemetry for the exact user query so ranks & norms are 100% consistent
         direct_results = compute_live_hybrid_retrieval(active_query, chunks, alpha=alpha_slider, top_k=5)
-        math_rows = []
+
+        simple_rows = []
+        raw_math_rows = []
         for r in direct_results:
             mt = r.math_trace
-            math_rows.append({
+            simple_rows.append({
                 "Rank": f"#{r.rank}",
-                "Doc ID": r.chunk.doc_id,
-                "Clause / Table": r.chunk.clause_id,
-                "Matched Terms": ", ".join(mt.matched_query_terms[:6]) if mt else "",
+                "Policy": r.chunk.doc_id,
+                "Clause": r.chunk.clause_id,
+                "Matched Words": ", ".join(mt.matched_query_terms[:5]) if mt else "",
+                "Keyword (BM25)": round(r.sparse_score, 4),
+                "Vector (Cosine)": round(r.dense_score, 4),
+                f"Hybrid (α={alpha_slider:.2f})": round(r.hybrid_score, 4),
+            })
+            raw_math_rows.append({
+                "Rank": f"#{r.rank}",
+                "Policy": r.chunk.doc_id,
+                "Clause": r.chunk.clause_id,
                 "BM25 (Raw)": round(mt.bm25_raw_score, 4) if mt else 0.0,
-                "Sparse (Norm BM25)": round(r.sparse_score, 4),
                 "||q||_2": round(mt.query_vector_norm, 4) if mt else 0.0,
                 "||d||_2": round(mt.doc_vector_norm, 4) if mt else 0.0,
                 "Dot (q·d)": round(mt.dot_product, 4) if mt else 0.0,
-                "Dense (Cosine)": round(r.dense_score, 4),
-                f"Hybrid (α={alpha_slider:.2f})": round(r.hybrid_score, 4),
+                "Cosine": round(r.dense_score, 4),
             })
-        st.dataframe(pd.DataFrame(math_rows), width="stretch", hide_index=True)
 
-        chart_col1, chart_col2 = st.columns([1.25, 1.0])
-        with chart_col1:
-            fig_scores = go.Figure()
-            x_labels = [f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:16]}" for r in direct_results]
-            fig_scores.add_trace(go.Bar(name="Sparse (BM25)", x=x_labels, y=[r.sparse_score for r in direct_results], marker_color="#3B82F6"))
-            fig_scores.add_trace(go.Bar(name="Dense (L2 Cosine)", x=x_labels, y=[r.dense_score for r in direct_results], marker_color="#10B981"))
-            fig_scores.add_trace(go.Bar(name=f"Hybrid (α={alpha_slider:.2f})", x=x_labels, y=[r.hybrid_score for r in direct_results], marker_color="#F59E0B"))
-            fig_scores.update_layout(
-                title="Sparse vs. Dense vs. Hybrid Scores (Top-5 Direct Chunks)",
-                barmode="group",
-                height=370,
-                yaxis_title="Score [0.0 – 1.0]",
-                legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5),
-                margin=dict(b=80),
-            )
-            st.plotly_chart(fig_scores, width="stretch")
+        st.markdown("#### Top-5 Retrieved Policy Clauses (Live Scores)")
+        st.dataframe(pd.DataFrame(simple_rows), width="stretch", hide_index=True)
 
-        with chart_col2:
-            top_trace = direct_results[0].math_trace
-            if top_trace and top_trace.idf_values:
-                terms = list(top_trace.idf_values.keys())[:8]
-                fig_terms = go.Figure()
-                fig_terms.add_trace(go.Bar(name="IDF Weight", x=terms, y=[top_trace.idf_values[t] for t in terms], marker_color="#8B5CF6"))
-                fig_terms.add_trace(go.Bar(name="Term Frequency (TF)", x=terms, y=[top_trace.term_frequencies.get(t, 1.0) for t in terms], marker_color="#14B8A6"))
-                fig_terms.update_layout(
-                    title=f"Token Attribution — Rank #1 ({direct_results[0].chunk.doc_id})",
-                    barmode="group",
-                    height=370,
-                    xaxis_title="Matched Token",
-                    yaxis_title="Weight / TF",
-                    legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5),
-                    margin=dict(b=80),
-                )
-                st.plotly_chart(fig_terms, width="stretch")
+        fig_scores = go.Figure()
+        x_labels = [f"{r.chunk.doc_id}<br>{r.chunk.clause_id[:16]}" for r in direct_results]
+        fig_scores.add_trace(go.Bar(name="Keyword (BM25)", x=x_labels, y=[r.sparse_score for r in direct_results], marker_color="#3B82F6"))
+        fig_scores.add_trace(go.Bar(name="Vector (L2 Cosine)", x=x_labels, y=[r.dense_score for r in direct_results], marker_color="#10B981"))
+        fig_scores.add_trace(go.Bar(name=f"Hybrid (α={alpha_slider:.2f})", x=x_labels, y=[r.hybrid_score for r in direct_results], marker_color="#F59E0B"))
+        fig_scores.update_layout(
+            title="Keyword vs. Vector vs. Hybrid Score Comparison (Top-5)",
+            barmode="group",
+            height=350,
+            yaxis_title="Normalized Score [0 – 1]",
+            legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5),
+            margin=dict(b=75),
+        )
+        st.plotly_chart(fig_scores, width="stretch")
 
-        # Live Side-by-Side Alpha Comparison (Pure BM25 vs Current Alpha)
-        st.markdown(f"#### ⚖️ Live Ranking Comparison: Pure Sparse (`α = 0.0`) vs. Current Setting (`α = {alpha_slider:.2f}`)")
+        st.markdown(f"#### ⚖️ Live Comparison: Pure Keyword (`α = 0.0`) vs. Current Hybrid (`α = {alpha_slider:.2f}`)")
         sparse_only_top = compute_live_hybrid_retrieval(active_query, chunks, alpha=0.0, top_k=3)
         current_top = direct_results[:3]
         comp_rows = []
@@ -1169,19 +1326,40 @@ with tab2:
             s_r, h_r = sparse_only_top[idx_c], current_top[idx_c]
             comp_rows.append({
                 "Rank": f"#{idx_c + 1}",
-                "Pure BM25 (α=0.0)": f"{s_r.chunk.doc_id} — {s_r.chunk.clause_id} (p.{s_r.chunk.page_number})",
+                "Pure Keyword BM25 (α=0.0)": f"{s_r.chunk.doc_id} — {s_r.chunk.clause_id} (p.{s_r.chunk.page_number})",
                 "BM25 Score": round(s_r.hybrid_score, 4),
                 f"Current Hybrid (α={alpha_slider:.2f})": f"{h_r.chunk.doc_id} — {h_r.chunk.clause_id} (p.{h_r.chunk.page_number})",
                 "Hybrid Score": round(h_r.hybrid_score, 4),
             })
         st.dataframe(pd.DataFrame(comp_rows), width="stretch", hide_index=True)
 
+        with st.expander("🔬 Detailed Vector Math (||q||₂, ||d||₂, Dot Product & Token TF/IDF)", expanded=False):
+            st.dataframe(pd.DataFrame(raw_math_rows), width="stretch", hide_index=True)
+            top_trace = direct_results[0].math_trace
+            if top_trace and top_trace.idf_values:
+                terms = list(top_trace.idf_values.keys())[:8]
+                fig_terms = go.Figure()
+                fig_terms.add_trace(go.Bar(name="IDF Weight", x=terms, y=[top_trace.idf_values[t] for t in terms], marker_color="#8B5CF6"))
+                fig_terms.add_trace(go.Bar(name="Term Frequency (TF)", x=terms, y=[top_trace.term_frequencies.get(t, 1.0) for t in terms], marker_color="#14B8A6"))
+                fig_terms.update_layout(
+                    title=f"Word Weights for Rank #1 ({direct_results[0].chunk.doc_id})",
+                    barmode="group",
+                    height=320,
+                    xaxis_title="Matched Word",
+                    yaxis_title="Weight / TF",
+                    legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5),
+                    margin=dict(b=75),
+                )
+                st.plotly_chart(fig_terms, width="stretch")
+
 
 # ==============================================================================
-# TAB 3: RAG TRIAD EVALUATION BENCHMARK (32 CASES)
+# TAB 3: RAG TRIAD BENCHMARK (Clear Executive Summary)
 # ==============================================================================
 with tab3:
-    st.subheader("📊 Quantitative RAG Triad Evaluation Benchmark (32 Ground-Truth Cases)")
+    st.subheader("📊 RAG Triad Evaluation Benchmark (32 Ground-Truth Cases)")
+    st.caption("Automated accuracy benchmark comparing Keyword-Only (BM25), Vector-Only (Cosine), and MediAcad Hybrid (α = 0.50).")
+
     summary = bench_data["summary"]
     sparse_ab = bench_data["ablation_study"][0]
     cr_delta = (summary["mean_context_relevance"] - sparse_ab["context_relevance"]) * 100.0
@@ -1189,34 +1367,34 @@ with tab3:
     ov_delta = (summary["mean_overall_score"] - sparse_ab["overall_triad"]) * 100.0
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("1. Mean Context Relevance", f"{summary['mean_context_relevance'] * 100:.2f}%", f"{cr_delta:+.2f}% vs BM25")
-    k2.metric("2. Mean Groundedness", f"{summary['mean_groundedness'] * 100:.2f}%", "Verified Citations")
-    k3.metric("3. Mean Answer Relevance", f"{summary['mean_answer_relevance'] * 100:.2f}%", f"{ar_delta:+.2f}% vs BM25")
-    k4.metric("Overall RAG Triad Score", f"{summary['mean_overall_score'] * 100:.2f}%", f"{ov_delta:+.2f}% vs BM25")
+    k1.metric("1. Context Relevance", f"{summary['mean_context_relevance'] * 100:.2f}%", f"{cr_delta:+.2f}% vs BM25")
+    k2.metric("2. Groundedness", f"{summary['mean_groundedness'] * 100:.2f}%", "Verified Citations")
+    k3.metric("3. Answer Relevance", f"{summary['mean_answer_relevance'] * 100:.2f}%", f"{ar_delta:+.2f}% vs BM25")
+    k4.metric("Overall RAG Triad", f"{summary['mean_overall_score'] * 100:.2f}%", f"{ov_delta:+.2f}% vs BM25")
 
     c_left, c_right = st.columns([1.1, 1.0])
     with c_left:
-        st.markdown("#### 🔬 Ablation Study: Sparse vs. Dense vs. Hybrid Fusion")
+        st.markdown("#### 🔬 Ablation Comparison (BM25 vs. Cosine vs. Hybrid)")
         df_ablation = pd.DataFrame(bench_data["ablation_study"])
         fig_ab = px.bar(
             df_ablation,
             x="mode",
             y=["context_relevance", "groundedness", "answer_relevance", "overall_triad"],
             barmode="group",
-            height=420,
+            height=400,
             color_discrete_sequence=["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B"],
         )
         fig_ab.update_layout(
             yaxis_range=[0.60, 1.04],
-            xaxis_title="Retrieval Strategy",
+            xaxis_title="Retrieval Method",
             yaxis_title="Score",
             legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5, title_text=""),
-            margin=dict(b=90),
+            margin=dict(b=85),
         )
         st.plotly_chart(fig_ab, width="stretch")
 
     with c_right:
-        st.markdown("#### 🕸️ RAG Triad Multi-Axis Radar Geometry")
+        st.markdown("#### 🕸️ Multi-Metric Radar Summary")
         categories_radar = ["Context Relevance", "Groundedness", "Answer Relevance", "Overall Triad", "Context Relevance"]
         fig_radar = go.Figure()
         radar_colors = ["#3B82F6", "#10B981", "#F59E0B"]
@@ -1242,13 +1420,13 @@ with tab3:
                 bgcolor="rgba(15, 41, 66, 0.25)",
                 radialaxis=dict(visible=True, range=[0.55, 1.02], gridcolor="rgba(148, 163, 184, 0.3)"),
             ),
-            height=420,
+            height=400,
             legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
-            margin=dict(t=35, b=95, l=45, r=45),
+            margin=dict(t=35, b=90, l=45, r=45),
         )
         st.plotly_chart(fig_radar, width="stretch")
 
-    st.markdown("#### 📂 Performance Breakdown by Query Category")
+    st.markdown("#### 📂 Accuracy by Question Category")
     cat_rows = [
         {
             "Category": cat_name,
@@ -1256,64 +1434,95 @@ with tab3:
             "Context Relevance": vals["context_relevance"],
             "Groundedness": vals["groundedness"],
             "Answer Relevance": vals["answer_relevance"],
-            "Overall RAG Triad": vals["overall"],
+            "Overall Triad": vals["overall"],
         }
         for cat_name, vals in bench_data["category_breakdown"].items()
     ]
     st.dataframe(pd.DataFrame(cat_rows), width="stretch", hide_index=True)
 
-    st.markdown("#### 🧾 Complete 32-Case Ground-Truth Evaluation Audit Table")
-    df_cases = pd.DataFrame(bench_data["case_results"])[
-        ["case_id", "category", "query", "context_relevance", "groundedness", "answer_relevance", "overall_triad_score"]
-    ]
-    st.dataframe(df_cases, width="stretch", hide_index=True)
+    with st.expander("🧾 View All 32 Individual Test Cases (Full Audit Table)", expanded=False):
+        df_cases = pd.DataFrame(bench_data["case_results"])[
+            ["case_id", "category", "query", "context_relevance", "groundedness", "answer_relevance", "overall_triad_score"]
+        ]
+        st.dataframe(df_cases, width="stretch", hide_index=True)
 
 
 # ==============================================================================
-# TAB 4: OFFICIAL POLICY CORPUS & CONFLICT MATRIX
+# TAB 4: POLICY LIBRARY & 2023 vs. 2025 CONFLICT MATRIX
 # ==============================================================================
 with tab4:
-    st.subheader("📚 Official University Regulatory Corpus Inventory (5 Senate PDFs)")
+    st.subheader("⚡ 2023 Legacy Handbook vs. 2025 Senate Policy Conflict Matrix")
+    st.caption("When the older 2023 Student Handbook conflicts with a 2025 Senate Policy, MediAcad automatically enforces the 2025 rule.")
+
+    conflict_table = pd.DataFrame([
+        {
+            "Conflict ID": "CONFLICT-01",
+            "Topic": "Missed Final Exam Medical Deadline",
+            "Old 2023 Handbook (Sec 5)": "7 Calendar Days from exam date (Clause 5.1)",
+            "Active 2025 Senate Policy": "5 Working Days from exam or discharge (POL-ACAD-EX-01 Clause 3.2)",
+        },
+        {
+            "Conflict ID": "CONFLICT-02",
+            "Topic": "Minimum Attendance Condonation Floor",
+            "Old 2023 Handbook (Sec 5)": "60% Minimum Attendance (Clause 5.2)",
+            "Active 2025 Senate Policy": "70% Standard / 65% Inpatient Hard Floor; <65% Barred (POL-ACAD-AT-02)",
+        },
+        {
+            "Conflict ID": "CONFLICT-03",
+            "Topic": "Unapproved Late Coursework Penalty",
+            "Old 2023 Handbook (Sec 5)": "2% per calendar day up to 10 days (Clause 5.3)",
+            "Active 2025 Senate Policy": "5% per working day up to 5 days; 0% after Day 5 (POL-ACAD-CW-03)",
+        },
+        {
+            "Conflict ID": "CONFLICT-04",
+            "Topic": "Coursework Extension Authority",
+            "Old 2023 Handbook (Sec 5)": "Up to 21 Days by Module Lecturer (Clause 5.4)",
+            "Active 2025 Senate Policy": "Tier 1: 3d (Lecturer), Tier 2: 7d (HoD), Tier 3: Max 14d (EC Panel)",
+        },
+        {
+            "Conflict ID": "CONFLICT-05",
+            "Topic": "Ayurvedic Medical Certificates",
+            "Old 2023 Handbook (Sec 5)": "Private Ayurvedic notes accepted directly (Clause 5.5)",
+            "Active 2025 Senate Policy": "ONLY Govt. Ayurvedic Teaching Hospital + CMO stamp within 3 working days",
+        },
+    ])
+    st.dataframe(conflict_table, width="stretch", hide_index=True)
+
+    st.markdown("#### 📚 Official University Senate Policy PDFs (Download)")
     corpus_inventory = pd.DataFrame([
         {
-            "Document ID": "POL-ACAD-EX-01",
-            "Official Policy Title": "Examination and Medical Consideration Regulations",
-            "Version": "v4.0 (2025 Senate Active)",
-            "Tables": 4,
-            "Core Scope": "Fit-to-Sit (2.1), Form INV-09 collapse (2.2), 48h Portal Alert (3.1), 5-Working-Day EC-01 (3.2)",
+            "Policy ID": "POL-ACAD-EX-01",
+            "Title": "Examination and Medical Consideration Regulations",
+            "Version": "v4.0 (2025 Active)",
+            "Key Rules": "Fit-to-Sit (2.1), Form INV-09 collapse (2.2), 48h Portal Alert (3.1), 5-Working-Day EC-01 (3.2)",
         },
         {
-            "Document ID": "POL-ACAD-AT-02",
-            "Official Policy Title": "Attendance and Medical Absence Policy",
-            "Version": "v3.2 (2025 Senate Active)",
-            "Tables": 4,
-            "Core Scope": "80% Baseline, 70–79.9% HoD (ATT-02A), 65–69.9% Dean Inpatient (ATT-02B), <65% Barred Floor (PRG-05-INT)",
+            "Policy ID": "POL-ACAD-AT-02",
+            "Title": "Attendance and Medical Absence Policy",
+            "Version": "v3.2 (2025 Active)",
+            "Key Rules": "80% Baseline, 70–79.9% HoD (ATT-02A), 65–69.9% Dean (ATT-02B), <65% Barred (PRG-05-INT)",
         },
         {
-            "Document ID": "POL-ACAD-CW-03",
-            "Official Policy Title": "Coursework and Assessment Support Regulations",
-            "Version": "v3.0 (2025 Senate Active)",
-            "Tables": 3,
-            "Core Scope": "3-Tier Extensions (EXT-03A/B/C), 5%/Working-Day Late Penalty (Table 4.1), Hardware Failure Exclusion (5.3)",
+            "Policy ID": "POL-ACAD-CW-03",
+            "Title": "Coursework and Assessment Support Regulations",
+            "Version": "v3.0 (2025 Active)",
+            "Key Rules": "3-Tier Extensions (EXT-03A/B/C), 5%/Working-Day Penalty (Table 4.1), Hardware Exclusion (5.3)",
         },
         {
-            "Document ID": "POL-MED-WF-04",
-            "Official Policy Title": "Medical Documentation and Student Welfare Guidelines",
-            "Version": "v3.5 (2025 Senate Active)",
-            "Tables": 3,
-            "Core Scope": "Clinical Guardrail (1.1), Govt Ayurvedic + CMO 3-Day Rule (2.2), Family Exclusion (2.3), Fraud Zero-Tolerance (5.2)",
+            "Policy ID": "POL-MED-WF-04",
+            "Title": "Medical Documentation and Student Welfare Guidelines",
+            "Version": "v3.5 (2025 Active)",
+            "Key Rules": "Clinical Guardrail (1.1), Govt Ayurvedic + CMO 3-Day Rule (2.2), Family Exclusion (2.3), Fraud (5.2)",
         },
         {
-            "Document ID": "HBK-ACAD-PR-05",
-            "Official Policy Title": "Academic Progression and Student Handbook",
-            "Version": "v1.8 (2023 Legacy / 2025 Overrides)",
-            "Tables": 3,
-            "Core Scope": "Credit Progression & Intercalation (Sec 1–4 Active); Sec 5 Legacy Clauses Overridden by 2025 Senate Policies",
+            "Policy ID": "HBK-ACAD-PR-05",
+            "Title": "Academic Progression and Student Handbook",
+            "Version": "v1.8 (2023 Legacy / Overrides)",
+            "Key Rules": "Credit Progression & Intercalation (Sec 1–4 Active); Sec 5 Legacy Rules Overridden by 2025 Policies",
         },
     ])
     st.dataframe(corpus_inventory, width="stretch", hide_index=True)
 
-    st.markdown("#### 📥 Direct Official Senate Policy PDF Downloads")
     pdf_files_info = [
         ("POL-ACAD-EX-01", "01_Examination_and_Medical_Consideration_Regulations.pdf"),
         ("POL-ACAD-AT-02", "02_Attendance_and_Medical_Absence_Policy.pdf"),
@@ -1335,48 +1544,13 @@ with tab4:
                     key=f"dl_pdf_{doc_code}",
                 )
 
-    st.markdown("#### ⚡ Automated 2023 Legacy Handbook vs. 2025 Senate Policy Conflict Matrix")
-    conflict_table = pd.DataFrame([
-        {
-            "Conflict ID": "CONFLICT-01",
-            "Policy Domain": "Missed Final Exam Medical Deadline",
-            "Obsolete 2023 Handbook (Sec 5)": "7 Calendar Days from exam date (Clause 5.1)",
-            "Binding 2025 Senate Policy": "5 Working Days from exam or discharge (POL-ACAD-EX-01 Clause 3.2)",
-        },
-        {
-            "Conflict ID": "CONFLICT-02",
-            "Policy Domain": "Minimum Attendance Condonation Floor",
-            "Obsolete 2023 Handbook (Sec 5)": "60% Minimum Attendance (Clause 5.2)",
-            "Binding 2025 Senate Policy": "70% Standard / 65% Inpatient Hard Floor; <65% Barred (POL-ACAD-AT-02)",
-        },
-        {
-            "Conflict ID": "CONFLICT-03",
-            "Policy Domain": "Unapproved Late Coursework Penalty",
-            "Obsolete 2023 Handbook (Sec 5)": "2% per calendar day up to 10 days (Clause 5.3)",
-            "Binding 2025 Senate Policy": "5% per working day up to 5 days; 0% after Day 5 (POL-ACAD-CW-03)",
-        },
-        {
-            "Conflict ID": "CONFLICT-04",
-            "Policy Domain": "Coursework Extension Authority",
-            "Obsolete 2023 Handbook (Sec 5)": "Up to 21 Days by Module Lecturer (Clause 5.4)",
-            "Binding 2025 Senate Policy": "Tier 1: 3d (Lecturer), Tier 2: 7d (HoD), Tier 3: Max 14d (EC Panel)",
-        },
-        {
-            "Conflict ID": "CONFLICT-05",
-            "Policy Domain": "Ayurvedic Medical Certificates",
-            "Obsolete 2023 Handbook (Sec 5)": "Private Ayurvedic notes accepted directly (Clause 5.5)",
-            "Binding 2025 Senate Policy": "ONLY Govt. Ayurvedic Teaching Hospital + CMO stamp within 3 working days",
-        },
-    ])
-    st.dataframe(conflict_table, width="stretch", hide_index=True)
-
-    st.markdown("#### 🔍 Interactive Policy Clause Explorer")
-    st.caption(f"Indexed **{len(chunks)}** structure-aware chunks (`data/processed_chunks.json`) | Vector Store: {vector_store_status}.")
+    st.markdown("#### 🔍 Search All 138 Policy Clauses")
+    st.caption(f"Storage: {vector_store_status}")
     filter_col1, filter_col2 = st.columns([1, 2])
     with filter_col1:
-        selected_doc = st.selectbox("Filter by Document:", ["All Documents"] + sorted({c.doc_id for c in chunks}))
+        selected_doc = st.selectbox("Filter by Policy:", ["All Documents"] + sorted({c.doc_id for c in chunks}))
     with filter_col2:
-        keyword_filter = st.text_input("Search clauses by keyword (e.g., forged, Form EC-01, Ayurvedic):", "")
+        keyword_filter = st.text_input("Search keyword (e.g., forged, Form EC-01, INV-09, Ayurvedic):", "")
 
     filtered_chunks = [
         c
@@ -1384,7 +1558,7 @@ with tab4:
         if (selected_doc == "All Documents" or c.doc_id == selected_doc)
         and (not keyword_filter.strip() or keyword_filter.strip().lower() in c.text.lower())
     ]
-    st.caption(f"Displaying **{len(filtered_chunks)}** matching policy chunk(s).")
-    for c in filtered_chunks[:40]:
-        with st.expander(f"{c.doc_id} ({c.policy_version}) — {c.section_title} | {c.clause_id} (Page {c.page_number})"):
+    st.caption(f"Showing **{len(filtered_chunks)}** matching clause(s).")
+    for c in filtered_chunks[:30]:
+        with st.expander(f"{c.doc_id} — {c.clause_id} (Page {c.page_number})"):
             st.write(clean_policy_display_text(c.text))
