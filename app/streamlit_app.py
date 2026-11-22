@@ -612,7 +612,10 @@ def _format_readable_grounded_answer(
         if "|" in primary_chunk.text:
             # Cleanly separate pipe-delimited table rows instead of mashing into one paragraph
             raw_rows = [ln.strip() for ln in primary_chunk.text.splitlines() if ln.strip() and not ln.strip().startswith("[Doc:") and not set(ln.strip()) <= set("|-: ")]
-            formatted_rows = "\n".join(f"- {re.sub(r'\\s*\\|\\s*', ' — ', row.strip('| '))}" for row in raw_rows[:6])
+            formatted_rows = "\n".join(
+                "- " + re.sub(r"\s*\|\s*", " — ", row.strip("| "))
+                for row in raw_rows[:6]
+            )
             blocks.append(
                 f"#### 📌 Direct Governing Policy — `{primary_chunk.doc_id}` ({primary_chunk.clause_id}, Page {primary_chunk.page_number})\n\n"
                 f"{formatted_rows}"
